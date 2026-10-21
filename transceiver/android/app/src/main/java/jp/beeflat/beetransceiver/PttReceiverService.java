@@ -38,7 +38,7 @@ public class PttReceiverService extends Service {
     private static final AtomicBoolean running=new AtomicBoolean(false);
     private Thread worker; private MulticastSocket socket;
     private WifiManager.MulticastLock multicastLock; private WifiManager.WifiLock wifiLock; private PowerManager.WakeLock wakeLock;
-    private UUID localId,activeRemoteSender; private long activeRemoteLastMs;
+    private UUID localId,activeRemoteSender; private long activeRemoteLastMs; private String activeRemoteName="";
 
     public static void start(Context c){
         c.getSharedPreferences(UploadConfig.PREFS,Context.MODE_PRIVATE).edit().putBoolean(PREF_ENABLED,true).apply();
@@ -85,7 +85,7 @@ public class PttReceiverService extends Service {
             byte[]buf=new byte[1400];DatagramPacket p=new DatagramPacket(buf,buf.length);
             while(running.get()&&enabled()){
                 try{p.setLength(buf.length);socket.receive(p);handlePacket(track,p.getData(),p.getLength());}
-                catch(java.net.SocketTimeoutException e){if(activeRemoteSender!=null&&System.currentTimeMillis()-activeRemoteLastMs>TALKER_HOLD_MS)activeRemoteSender=null;}
+                catch(java.net.SocketTimeoutException e){if(activeRemoteSender!=null&&System.currentTimeMillis()-activeRemoteLastMs>TALKER_HOLD_MS){activeRemoteSender=null;activeRemoteName="";}}
             }
         }finally{closeSocket();if(track!=null){try{track.stop();}catch(Exception ignored){}try{track.release();}catch(Exception ignored){}}}
     }
@@ -97,9 +97,11 @@ public class PttReceiverService extends Service {
             UUID sender=new UUID(b.getLong(),b.getLong());b.getInt();
             int nameLen=b.get()&0xff;if(nameLen>b.remaining())return;byte[]nb=new byte[nameLen];b.get(nb);String name=new String(nb,StandardCharsets.UTF_8);
             int audioLen=b.getShort()&0xffff;if(audioLen<=0||audioLen>b.remaining()||sender.equals(localId))return;
-            long now=System.currentTimeMillis();if(activeRemoteSender==null||now-activeRemoteLastMs>TALKER_HOLD_MS)activeRemoteSender=sender;if(!sender.equals(activeRemoteSender))return;
+            long now=System.currentTimeMillis();
+            boolean newTalker=activeRemoteSender==null||now-activeRemoteLastMs>TALKER_HOLD_MS;
+            if(newTalker){activeRemoteSender=sender;activeRemoteName=name;((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID,notification("受信中: "+name));}
+            if(!sender.equals(activeRemoteSender))return;
             activeRemoteLastMs=now;byte[]audio=new byte[audioLen];b.get(audio);track.write(audio,0,audio.length,AudioTrack.WRITE_BLOCKING);
-            ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID,notification("受信中: "+name));
         }catch(Exception ignored){}
     }
     @SuppressWarnings("deprecation") private void acquireLocks(){
