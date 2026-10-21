@@ -1,0 +1,1 @@
+# BeeTransceiver uses platform APIs only.
