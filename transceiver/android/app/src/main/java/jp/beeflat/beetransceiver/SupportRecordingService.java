@@ -150,16 +150,33 @@ public class SupportRecordingService extends Service {
 
             }
 
-        }catch(Exception e){BeeLog.write(this,"support_error",msg(e));showError("支援時間録音エラー: "+msg(e));}
+        }catch(Exception e){
+            boolean retry=running.get();
+            BeeLog.write(this,"support_error",msg(e));
+            showError("支援時間録音エラー: "+msg(e)+(retry?" / 5秒後に自動復旧":""));
+            if(record!=null){try{record.stop();}catch(Exception ignored){}try{record.release();}catch(Exception ignored){}record=null;}
+            if(sock!=null)try{sock.close();}catch(Exception ignored){}
+            if(writer!=null){try{writer.close();writer=null;if(target!=null){AudioUploader.enqueue(this,target.finish());target=null;}}catch(Exception closeError){if(target!=null)target.abort();BeeLog.write(this,"support_close_error",msg(closeError));}}
+            else if(target!=null)target.abort();
+            releaseWakeLock();AudioUploader.schedule(this);
+            if(retry&&running.get()){
+                BeeLog.write(this,"support_retry","5000ms");
+                new android.os.Handler(getMainLooper()).postDelayed(()->{if(running.get())startWorker();},5000L);
+            }else{
+                running.set(false);pttActive.set(false);broadcastState(false);stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();
+            }
+            return;
+        }
 
         finally{
-
-            running.set(false);pttActive.set(false);if(record!=null){try{record.stop();}catch(Exception ignored){}try{record.release();}catch(Exception ignored){}}if(sock!=null)try{sock.close();}catch(Exception ignored){}
-
-            if(writer!=null){try{writer.close();writer=null;if(target!=null){AudioUploader.enqueue(this,target.finish());target=null;}}catch(Exception e){if(target!=null)target.abort();showError("支援時間ファイル終了エラー: "+msg(e));}}else if(target!=null)target.abort();
-
-            releaseWakeLock();broadcastState(false);AudioUploader.schedule(this);stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();
-
+            if(record!=null){try{record.stop();}catch(Exception ignored){}try{record.release();}catch(Exception ignored){}}
+            if(sock!=null)try{sock.close();}catch(Exception ignored){}
+            if(writer!=null){try{writer.close();if(target!=null){AudioUploader.enqueue(this,target.finish());target=null;}}catch(Exception e){if(target!=null)target.abort();showError("支援時間ファイル終了エラー: "+msg(e));}}
+            else if(target!=null)target.abort();
+            releaseWakeLock();AudioUploader.schedule(this);
+            if(!running.get()){
+                pttActive.set(false);broadcastState(false);stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();
+            }
         }
 
     },"BeeSupportRecording");worker.start();}
