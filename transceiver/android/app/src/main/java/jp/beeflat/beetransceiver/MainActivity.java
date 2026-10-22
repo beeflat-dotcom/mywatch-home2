@@ -92,6 +92,7 @@ public class MainActivity extends Activity {
 
     private AudioEngine engine;private TextView statusView;private Button pttButton,supportButton;private EditText nameEdit,serverUrlEdit;private CheckBox mobileUploadCheck;private SharedPreferences prefs;
 
+    private final BroadcastReceiver internetStateReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){String status=i.getStringExtra(InternetPttRelay.EXTRA_STATUS);if(statusView!=null&&status!=null)statusView.setText(status);}};
     private final BroadcastReceiver supportStateReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){if(SupportRecordingService.ACTION_STATE.equals(i.getAction()))updateSupportButton(i.getBooleanExtra(SupportRecordingService.EXTRA_RUNNING,false));}};
 
     @Override protected void onCreate(Bundle b){super.onCreate(b);setVolumeControlStream(AudioManager.STREAM_MUSIC);prefs=getSharedPreferences(PREFS,MODE_PRIVATE);buildUi();engine=new AudioEngine(this,new AudioEngine.Listener(){public void onStatus(String t){mainHandler.post(()->statusView.setText(t));}public void onSaved(String p){mainHandler.post(()->Toast.makeText(MainActivity.this,"音声ログ保存・送信待ち: "+p,Toast.LENGTH_LONG).show());}public void onError(String m){mainHandler.post(()->{statusView.setText("エラー: "+m);Toast.makeText(MainActivity.this,m,Toast.LENGTH_LONG).show();});}});try{PttReceiverService.start(this);}catch(RuntimeException e){BeeLog.write(this,"ptt_start_error",e.toString());statusView.setText("受信起動エラー: "+e.getClass().getSimpleName());}AudioUploader.schedule(this);}
@@ -162,9 +163,9 @@ public class MainActivity extends Activity {
 
     private String currentDeviceName(){String s=nameEdit.getText().toString().trim();return s.isEmpty()?defaultDeviceName():s;}private String defaultDeviceName(){return"端末-"+Build.MODEL;}private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 
-    @Override protected void onStart(){super.onStart();IntentFilter f=new IntentFilter(SupportRecordingService.ACTION_STATE);if(Build.VERSION.SDK_INT>=33)registerReceiver(supportStateReceiver,f,Context.RECEIVER_NOT_EXPORTED);else registerReceiver(supportStateReceiver,f);updateSupportButton(SupportRecordingService.isRunning());}
+    @Override protected void onStart(){super.onStart();IntentFilter nf=new IntentFilter(InternetPttRelay.ACTION_STATUS);if(Build.VERSION.SDK_INT>=33)registerReceiver(internetStateReceiver,nf,Context.RECEIVER_NOT_EXPORTED);else registerReceiver(internetStateReceiver,nf);IntentFilter f=new IntentFilter(SupportRecordingService.ACTION_STATE);if(Build.VERSION.SDK_INT>=33)registerReceiver(supportStateReceiver,f,Context.RECEIVER_NOT_EXPORTED);else registerReceiver(supportStateReceiver,f);updateSupportButton(SupportRecordingService.isRunning());}
 
-    @Override protected void onStop(){try{unregisterReceiver(supportStateReceiver);}catch(Exception ignored){}saveSettings();super.onStop();}
+    @Override protected void onStop(){try{unregisterReceiver(supportStateReceiver);}catch(Exception ignored){}try{unregisterReceiver(internetStateReceiver);}catch(Exception ignored){}saveSettings();super.onStop();}
 
     @Override public void onRequestPermissionsResult(int r,String[]p,int[]g){super.onRequestPermissionsResult(r,p,g);if(r==REQ_RECORD_AUDIO)Toast.makeText(this,g.length>0&&g[0]==PackageManager.PERMISSION_GRANTED?"マイクを許可しました。もう一度ボタンを押してください。":"トランシーバーにはマイク権限が必要です。",Toast.LENGTH_LONG).show();}
 
