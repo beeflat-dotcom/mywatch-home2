@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class PttReceiverService extends Service {
     public static final String ACTION_START="jp.beeflat.beetransceiver.action.PTT_RX_START";
+    public static final String ACTION_RESTART_INTERNET="jp.beeflat.beetransceiver.action.PTT_INTERNET_RESTART";
     public static final String ACTION_STOP="jp.beeflat.beetransceiver.action.PTT_RX_STOP";
     private static final String PREF_ENABLED="ptt_receiver_enabled";
     private static final String CHANNEL_ID="ptt_receiver";
@@ -48,6 +49,7 @@ public class PttReceiverService extends Service {
         Intent i=new Intent(c,PttReceiverService.class).setAction(ACTION_START);
         if(Build.VERSION.SDK_INT>=26)c.startForegroundService(i);else c.startService(i);
     }
+    public static void restartInternet(Context c){c.startService(new Intent(c,PttReceiverService.class).setAction(ACTION_RESTART_INTERNET));}
     public static void stop(Context c){
         c.getSharedPreferences(UploadConfig.PREFS,Context.MODE_PRIVATE).edit().putBoolean(PREF_ENABLED,false).apply();
         c.startService(new Intent(c,PttReceiverService.class).setAction(ACTION_STOP));
@@ -57,6 +59,7 @@ public class PttReceiverService extends Service {
     @Override public void onCreate(){super.onCreate();localId=DeviceIdentity.get(this);createChannel();BeeLog.write(this,"ptt_rx_create","");}
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         String action=intent==null?null:intent.getAction();
+        if(ACTION_RESTART_INTERNET.equals(action)){if(internetRelay!=null)internetRelay.reconnect();return START_STICKY;}
         if(ACTION_STOP.equals(action)){running.set(false);if(internetRelay!=null)internetRelay.stop();closeSocket();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY;}
         if(!enabled()){stopSelf();return START_NOT_STICKY;}
         Notification n=notification("トランシーバー受信待機中 / 画面OFFでも受信");
