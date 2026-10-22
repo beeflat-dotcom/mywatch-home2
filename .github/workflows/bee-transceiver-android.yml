@@ -34,12 +34,11 @@ jobs:
       - name: Compile debug APK
         working-directory: transceiver/android
         run: gradle :app:assembleDebug --stacktrace
-      - name: Collect signing tools
+      - name: Collect signing tool
         shell: bash
         run: |
           mkdir -p signing-tools
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" signing-tools/
-          cp "$HOME/.android/debug.keystore" signing-tools/
       - uses: actions/upload-artifact@v4
         with:
           name: BeeTransceiver-v0.6.0-debug
