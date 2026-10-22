@@ -168,7 +168,7 @@ final class AudioUploader {
 
         c.setConnectTimeout(10000);c.setReadTimeout(30000);c.setDoOutput(true);c.setRequestMethod("POST");
 
-        c.setRequestProperty("Authorization","Bearer "+UploadConfig.API_TOKEN);
+        c.setRequestProperty("Authorization","Bearer "+UploadConfig.token(context));
 
         c.setRequestProperty("Content-Type","application/octet-stream");
 
