@@ -5,6 +5,12 @@ package jp.beeflat.beetransceiver;
 import android.Manifest;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import org.json.JSONObject;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 import android.content.BroadcastReceiver;
 
@@ -93,6 +99,7 @@ public class MainActivity extends Activity {
     private void buildUi(){int pad=dp(18);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(pad,pad,pad,pad);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackgroundColor(Color.rgb(250,250,250));
 
         TextView title=new TextView(this);title.setText("びー・トランシーバー");title.setTextSize(26);title.setTextColor(Color.BLACK);title.setGravity(Gravity.CENTER);root.addView(title,new LinearLayout.LayoutParams(-1,-2));
+        Button pairButton=new Button(this);pairButton.setText(UploadConfig.token(this).isEmpty()?"ネット通話の端末登録（6桁）":"ネット通話の端末登録をやり直す");root.addView(pairButton,new LinearLayout.LayoutParams(-1,-2));pairButton.setOnClickListener(v->pairDevice());
 
         TextView sub=new TextView(this);sub.setText("画面OFFでもトランシーバー受信 / 支援録音は5分ごとにPCへ自動送信");sub.setTextSize(13);sub.setGravity(Gravity.CENTER);LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(-1,-2);slp.topMargin=dp(6);root.addView(sub,slp);
 
@@ -111,6 +118,41 @@ public class MainActivity extends Activity {
         TextView note=new TextView(this);note.setText("画面を消したりロックしても、トランシーバー受信と支援録音は継続します。支援録音は5分ごとに分割し、PCがSHA256確認したファイルだけ端末から削除します。端末自体の電源OFF中は受信できません。");note.setTextSize(12);note.setGravity(Gravity.CENTER);root.addView(note,new LinearLayout.LayoutParams(-1,-2));
 
         pttButton.setOnTouchListener((v,e)->{switch(e.getActionMasked()){case MotionEvent.ACTION_DOWN:if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},REQ_RECORD_AUDIO);return true;}saveSettings();pttButton.setText("送信中…");if(SupportRecordingService.isRunning())SupportRecordingService.pttStart(this,currentDeviceName());else engine.startTransmit(currentDeviceName());return true;case MotionEvent.ACTION_UP:case MotionEvent.ACTION_CANCEL:if(SupportRecordingService.isRunning())SupportRecordingService.pttStop(this);else engine.stopTransmit();pttButton.setText("押して話す");return true;}return false;});setContentView(root);}
+
+    private void pairDevice(){
+        EditText pin=new EditText(this);pin.setSingleLine(true);pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        pin.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(6)});
+        pin.setHint("Windows PCに表示された6桁の番号");
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("インターネット通話の端末登録")
+                .setMessage("PCで Bee_PTT_Pair.cmd を実行し、表示された番号を入力")
+                .setView(pin).setPositiveButton("登録",(d,w)->{
+                    String value=pin.getText().toString();
+                    if(!value.matches("[0-9]{6}")){Toast.makeText(this,"6桁で入力してください",Toast.LENGTH_LONG).show();return;}
+                    new Thread(()->{
+                        try{
+                            String endpoint=EndpointDiscovery.resolve(getApplicationContext());
+                            if(!endpoint.startsWith("https://"))throw new IllegalStateException("外部接続先を取得できません");
+                            HttpURLConnection c=(HttpURLConnection)new URL(endpoint+"/ptt/pair").openConnection();
+                            c.setRequestMethod("POST");c.setConnectTimeout(10000);c.setReadTimeout(10000);
+                            c.setRequestProperty("Content-Type","application/json");
+                            c.setDoOutput(true);
+                            byte[] payload=new JSONObject().put("code",value).toString().getBytes(StandardCharsets.UTF_8);
+                            try(OutputStream out=c.getOutputStream()){out.write(payload);}
+                            int result=c.getResponseCode();
+                            if(result!=200)throw new IllegalStateException("登録エラー HTTP "+result);
+                            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+                            try(java.io.InputStream in=c.getInputStream()){byte[] buf=new byte[1024];int n;while((n=in.read(buf))!=-1)bytes.write(buf,0,n);}
+                            String token=new JSONObject(bytes.toString("UTF-8")).getString("token");
+                            if(token.isEmpty())throw new IllegalStateException("認証情報が返されませんでした");
+                            UploadConfig.saveToken(this,token);
+                            AudioUploader.schedule(this);
+                            runOnUiThread(()->{Toast.makeText(this,"ネット通話の端末登録完了",Toast.LENGTH_LONG).show();
+                                PttReceiverService.restartInternet(this);});
+                        }catch(Exception ex){runOnUiThread(()->Toast.makeText(this,"端末登録失敗: "+ex.getMessage(),Toast.LENGTH_LONG).show());}
+                    },"BeePttPair").start();
+                }).setNegativeButton("キャンセル",null).create();
+        dialog.show();
+    }
 
     private void toggleSupportRecording(){if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},REQ_RECORD_AUDIO);return;}saveSettings();if(SupportRecordingService.isRunning()){SupportRecordingService.stop(this);updateSupportButton(false);}else{engine.stopTransmit();pttButton.setText("押して話す");SupportRecordingService.start(this,currentDeviceName());updateSupportButton(true);}}
 
