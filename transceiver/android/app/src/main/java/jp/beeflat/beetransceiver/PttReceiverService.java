@@ -38,6 +38,9 @@ public class PttReceiverService extends Service {
     private static final AtomicBoolean running=new AtomicBoolean(false);
     private Thread worker; private MulticastSocket socket;
     private WifiManager.MulticastLock multicastLock; private WifiManager.WifiLock wifiLock; private PowerManager.WakeLock wakeLock;
+    private InternetPttRelay internetRelay;
+    private AudioTrack internetTrack;
+    private final Object internetAudioLock=new Object();
     private UUID localId,activeRemoteSender; private long activeRemoteLastMs; private String activeRemoteName="";
 
     public static void start(Context c){
@@ -54,12 +57,42 @@ public class PttReceiverService extends Service {
     @Override public void onCreate(){super.onCreate();localId=DeviceIdentity.get(this);createChannel();BeeLog.write(this,"ptt_rx_create","");}
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         String action=intent==null?null:intent.getAction();
-        if(ACTION_STOP.equals(action)){running.set(false);closeSocket();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY;}
+        if(ACTION_STOP.equals(action)){running.set(false);if(internetRelay!=null)internetRelay.stop();closeSocket();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY;}
         if(!enabled()){stopSelf();return START_NOT_STICKY;}
         Notification n=notification("トランシーバー受信待機中 / 画面OFFでも受信");
         if(Build.VERSION.SDK_INT>=29)startForeground(NOTIFICATION_ID,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);else startForeground(NOTIFICATION_ID,n);
-        if(running.compareAndSet(false,true)){acquireLocks();startWorker();}
+        if(running.compareAndSet(false,true)){acquireLocks();startInternet();startWorker();}
         return START_STICKY;
+    }
+    private void startInternet(){
+        try{
+            internetRelay=new InternetPttRelay(this,this::playInternet);
+            internetRelay.start();
+        }catch(Exception e){BeeLog.write(this,"ptt_internet_start_error",msg(e));}
+    }
+    private void playInternet(byte[] packet){
+        try{
+            if(packet.length<28 || packet[0]!='B'||packet[1]!='P'||packet[2]!='T'||packet[3]!='1')return;
+            java.nio.ByteBuffer b=java.nio.ByteBuffer.wrap(packet).order(java.nio.ByteOrder.BIG_ENDIAN);
+            b.position(5);
+            UUID sender=new UUID(b.getLong(),b.getLong());
+            if(sender.equals(localId))return;
+            b.getInt();int nameLength=b.get()&255;
+            if(nameLength>b.remaining()-2)return;
+            byte[] nameBytes=new byte[nameLength];b.get(nameBytes);
+            int len=b.getShort()&65535;
+            if(len<=0||len>b.remaining())return;
+            byte[] pcm=new byte[len];b.get(pcm);
+            synchronized(internetAudioLock){
+                if(internetTrack==null){
+                    int min=AudioTrack.getMinBufferSize(SAMPLE_RATE,AudioFormat.CHANNEL_OUT_MONO,AudioFormat.ENCODING_PCM_16BIT);
+                    internetTrack=new AudioTrack(AudioManager.STREAM_MUSIC,SAMPLE_RATE,AudioFormat.CHANNEL_OUT_MONO,AudioFormat.ENCODING_PCM_16BIT,Math.max(min,640*12),AudioTrack.MODE_STREAM);
+                    if(internetTrack.getState()!=AudioTrack.STATE_INITIALIZED){internetTrack.release();internetTrack=null;return;}
+                    internetTrack.play();
+                }
+                internetTrack.write(pcm,0,len);
+            }
+        }catch(Exception e){BeeLog.write(this,"ptt_internet_play_error",msg(e));}
     }
     private void startWorker(){worker=new Thread(()->{
         int failures=0;
@@ -121,7 +154,7 @@ public class PttReceiverService extends Service {
                 .addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel,"受信停止",stop).build()).build();
     }
     @Override public void onTaskRemoved(Intent rootIntent){BeeLog.write(this,"ptt_rx_task_removed","enabled="+enabled());super.onTaskRemoved(rootIntent);}
-    @Override public void onDestroy(){running.set(false);closeSocket();releaseLocks();BeeLog.write(this,"ptt_rx_destroy","enabled="+enabled());super.onDestroy();}
+    @Override public void onDestroy(){running.set(false);if(internetRelay!=null)internetRelay.stop();synchronized(internetAudioLock){if(internetTrack!=null){try{internetTrack.stop();}catch(Exception ignored){}internetTrack.release();internetTrack=null;}}closeSocket();releaseLocks();BeeLog.write(this,"ptt_rx_destroy","enabled="+enabled());super.onDestroy();}
     private static String msg(Exception e){String m=e.getMessage();return m==null||m.trim().isEmpty()?e.getClass().getSimpleName():m;}
     @Override public IBinder onBind(Intent intent){return null;}
 }
