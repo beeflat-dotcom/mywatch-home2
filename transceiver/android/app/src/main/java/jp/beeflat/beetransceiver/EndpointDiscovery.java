@@ -34,6 +34,7 @@ final class EndpointDiscovery {
             return valid(cached)?trim(cached):"";
         }finally{if(c!=null)c.disconnect();}
     }
+    static void invalidate(Context c) {c.getSharedPreferences(UploadConfig.PREFS,Context.MODE_PRIVATE).edit().remove(UploadConfig.PREF_CACHED_ENDPOINT_AT).apply();}
     private static String read(InputStream in)throws Exception{
         try(InputStream x=in){byte[]b=new byte[4096];StringBuilder s=new StringBuilder();int n;
             while((n=x.read(b))>=0)if(n>0)s.append(new String(b,0,n,StandardCharsets.UTF_8));return s.toString();}
