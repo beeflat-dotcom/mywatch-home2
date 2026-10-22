@@ -1,7 +1,7 @@
 name: BeeTransceiver Android compile check
 on:
   push:
-    branches: [ "bee-transceiver-v0.6-background", "bee-transceiver-v0.6-final" ]
+    branches: [ "main", "bee-transceiver-v0.6-background", "bee-transceiver-v0.6-final" ]
     paths:
       - "transceiver/android/**"
       - ".github/workflows/bee-transceiver-android.yml"
