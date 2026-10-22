@@ -1,5 +1,7 @@
 plugins { id 'com.android.application' }
 
+dependencies { implementation 'com.squareup.okhttp3:okhttp:4.12.0' }
+
 def beeToken=(project.findProperty('BEE_AUDIO_TOKEN') ?: System.getenv('BEE_AUDIO_TOKEN') ?: '').toString()
 def quotedToken='"' + beeToken.replace('\\','\\\\').replace('"','\\"') + '"'
 
@@ -7,11 +9,11 @@ android {
     namespace 'jp.beeflat.beetransceiver'
     compileSdk 35
     defaultConfig {
-        applicationId 'jp.beeflat.beetransceiver'
+        applicationId 'jp.beeflat.beetransceiver.net'
         minSdk 26
         targetSdk 35
-        versionCode 8
-        versionName '0.6.1'
+        versionCode 9
+        versionName '0.7.0'
         buildConfigField 'String','BEE_AUDIO_TOKEN',quotedToken
         buildConfigField 'String','BEE_ENDPOINT_DISCOVERY_URL','"https://raw.githubusercontent.com/beeflat-dotcom/mywatch-home2/main/bee-audio/audio_external_api.json"'
     }
