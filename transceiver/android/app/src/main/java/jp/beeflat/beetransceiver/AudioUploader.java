@@ -95,17 +95,21 @@ final class AudioUploader {
     }
 
     static void schedule(Context context) {
-
-        JobScheduler js=(JobScheduler)context.getSystemService(Context.JOB_SCHEDULER_SERVICE); if(js==null)return;
-
-        JobInfo.Builder b=new JobInfo.Builder(JOB_ID,new ComponentName(context,AudioUploadJobService.class));
-
-        b.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY);
-
-        b.setPersisted(true); b.setBackoffCriteria(30000L,JobInfo.BACKOFF_POLICY_EXPONENTIAL);
-
-        js.schedule(b.build());
-
+        JobScheduler js=(JobScheduler)context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
+        if(js==null)return;
+        try{
+            JobInfo.Builder b=new JobInfo.Builder(JOB_ID,new ComponentName(context,AudioUploadJobService.class));
+            b.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY);
+            b.setPersisted(true);
+            b.setBackoffCriteria(30000L,JobInfo.BACKOFF_POLICY_EXPONENTIAL);
+            int result=js.schedule(b.build());
+            if(result!=JobScheduler.RESULT_SUCCESS){
+                BeeLog.write(context,"upload_schedule_failed","result="+result);
+            }
+        }catch(RuntimeException e){
+            // Keep the main activity usable even when the device refuses background jobs.
+            BeeLog.write(context,"upload_schedule_error",e.toString());
+        }
     }
 
     static boolean drain(Context context) {
