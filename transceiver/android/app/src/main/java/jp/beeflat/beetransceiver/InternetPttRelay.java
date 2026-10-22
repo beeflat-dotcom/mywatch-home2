@@ -30,6 +30,8 @@ final class InternetPttRelay {
         void receive(byte[] packet);
     }
 
+    private static volatile InternetPttRelay active;
+    static boolean sendActive(byte[] data) {InternetPttRelay relay=active;return relay!=null && relay.send(data);}
     private final Context context;
     private final Receiver receiver;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -51,7 +53,7 @@ final class InternetPttRelay {
     }
 
     void start() {
-        if (running.compareAndSet(false, true)) connect();
+        if (running.compareAndSet(false, true)) {active=this;connect();}
     }
 
     void reconnect() {
@@ -71,6 +73,7 @@ final class InternetPttRelay {
 
     void stop() {
         running.set(false);
+        if(active==this)active=null;
         generation.incrementAndGet();
         handler.removeCallbacksAndMessages(null);
         WebSocket old = socket;
