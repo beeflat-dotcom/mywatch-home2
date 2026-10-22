@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
 
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
 
-    private AudioEngine engine;private TextView statusView;private Button pttButton,supportButton;private EditText nameEdit,serverUrlEdit;private CheckBox mobileUploadCheck;private SharedPreferences prefs;
+    private AppUpdater appUpdater;private AudioEngine engine;private TextView statusView;private Button pttButton,supportButton;private EditText nameEdit,serverUrlEdit;private CheckBox mobileUploadCheck;private SharedPreferences prefs;
 
     private final BroadcastReceiver internetStateReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){String status=i.getStringExtra(InternetPttRelay.EXTRA_STATUS);if(statusView!=null&&status!=null)statusView.setText(status);}};
     private final BroadcastReceiver supportStateReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent i){if(SupportRecordingService.ACTION_STATE.equals(i.getAction()))updateSupportButton(i.getBooleanExtra(SupportRecordingService.EXTRA_RUNNING,false));}};
@@ -101,6 +101,7 @@ public class MainActivity extends Activity {
 
         TextView title=new TextView(this);title.setText("びー・トランシーバー");title.setTextSize(26);title.setTextColor(Color.BLACK);title.setGravity(Gravity.CENTER);root.addView(title,new LinearLayout.LayoutParams(-1,-2));
         Button pairButton=new Button(this);pairButton.setText(UploadConfig.token(this).isEmpty()?"ネット通話の端末登録（6桁）":"ネット通話の端末登録をやり直す");root.addView(pairButton,new LinearLayout.LayoutParams(-1,-2));pairButton.setOnClickListener(v->pairDevice());
+        Button updateButton=new Button(this);updateButton.setText("アップデート確認");updateButton.setAllCaps(false);root.addView(updateButton,new LinearLayout.LayoutParams(-1,-2));appUpdater=new AppUpdater(this,updateButton);updateButton.setOnClickListener(v->appUpdater.check());
 
         TextView sub=new TextView(this);sub.setText("画面OFFでもトランシーバー受信 / 支援録音は5分ごとにPCへ自動送信");sub.setTextSize(13);sub.setGravity(Gravity.CENTER);LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(-1,-2);slp.topMargin=dp(6);root.addView(sub,slp);
 
@@ -164,6 +165,8 @@ public class MainActivity extends Activity {
     private String currentDeviceName(){String s=nameEdit.getText().toString().trim();return s.isEmpty()?defaultDeviceName():s;}private String defaultDeviceName(){return"端末-"+Build.MODEL;}private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 
     @Override protected void onStart(){super.onStart();IntentFilter nf=new IntentFilter(InternetPttRelay.ACTION_STATUS);if(Build.VERSION.SDK_INT>=33)registerReceiver(internetStateReceiver,nf,Context.RECEIVER_NOT_EXPORTED);else registerReceiver(internetStateReceiver,nf);IntentFilter f=new IntentFilter(SupportRecordingService.ACTION_STATE);if(Build.VERSION.SDK_INT>=33)registerReceiver(supportStateReceiver,f,Context.RECEIVER_NOT_EXPORTED);else registerReceiver(supportStateReceiver,f);updateSupportButton(SupportRecordingService.isRunning());}
+
+    @Override protected void onResume(){super.onResume();if(appUpdater!=null)appUpdater.onResume();}
 
     @Override protected void onStop(){try{unregisterReceiver(supportStateReceiver);}catch(Exception ignored){}try{unregisterReceiver(internetStateReceiver);}catch(Exception ignored){}saveSettings();super.onStop();}
 
