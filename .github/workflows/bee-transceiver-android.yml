@@ -1,7 +1,7 @@
 name: BeeTransceiver Android compile check
 on:
   push:
-    branches: [ "main", "bee-transceiver-v0.6-background", "bee-transceiver-v0.6-final" ]
+    branches: [ "main", "bee-transceiver-v0.6-background", "bee-transceiver-v0.6-final", "bee-ptt-v0.7-internet" ]
     paths:
       - "transceiver/android/**"
       - ".github/workflows/bee-transceiver-android.yml"
@@ -38,7 +38,7 @@ jobs:
         run: gradle :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: BeeTransceiver-v0.6.1-debug
+          name: BeeTransceiver-v0.7.0-NET-debug
           path: transceiver/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
