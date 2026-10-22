@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827"><meta name="description" content="びー・トランシーバー Androidアプリの公式配布・更新情報">
+<title>びー・トランシーバー | アプリ更新</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif;background:#0b1020;color:#f5f7fc}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 90% 0%,#202f4a 0%,#0b1020 55%);min-height:100vh}
+main{width:min(880px,calc(100% - 36px));margin:0 auto;padding:58px 0 62px}
+.brand{font-weight:750;letter-spacing:.05em;font-size:14px;color:#ffd35b}
+h1{font-size:clamp(31px,6vw,52px);line-height:1.25;margin:22px 0 12px}
+.lead{color:#bdc8d8;line-height:1.9;font-size:16px;max-width:650px;margin:0 0 30px}
+.panel{background:#182238d9;border:1px solid #3b4661;border-radius:20px;padding:28px;margin:25px 0;box-shadow:0 12px 40px #0002}
+.pill{display:inline-block;padding:6px 12px;background:#2f3748;color:#cbd5e1;border-radius:24px;font-size:13px}
+.status{display:grid;gap:14px;margin:19px 0}strong{font-weight:700}.muted{color:#a9b5cb}
+.button{display:inline-flex;align-items:center;justify-content:center;background:#ffd35b;color:#161b27;font-weight:800;padding:15px 24px;border-radius:12px;text-decoration:none;min-height:50px;transition:filter .2s}
+.button:hover{filter:brightness(1.07)}.button[aria-disabled="true"]{background:#637187;color:#e1e6ee;pointer-events:none}
+h2{font-size:20px;margin:0 0 15px}p,li{line-height:1.9}ul{padding-left:22px}
+.info{background:#141f31;border-left:3px solid #ffd35b;border-radius:4px;padding:13px 16px;margin-top:21px}
+footer{color:#8898ad;font-size:13px;margin-top:42px}a{color:#ffd35b}
+.code{font-family:ui-monospace,Consolas,monospace;font-size:13px;overflow-wrap:anywhere}
+</style>
+</head>
+<body><main>
+<div class="brand">BEE-FLAT • ANDROID</div>
+<h1>びー・トランシーバー</h1>
+<p class="lead">今店・福成店をネットワーク越しにつなぐ、びーふらっと専用の音声連絡アプリ。ここから最新版の確認とダウンロードができます。</p>
+<section class="panel" aria-live="polite">
+<span class="pill" id="state">更新情報を確認しています</span>
+<h2 style="margin-top:20px">Android 最新版</h2>
+<div class="status"><div>バージョン：<strong id="version">確認中</strong></div>
+<div class="muted" id="published"></div><div id="changes" class="muted"></div></div>
+<a class="button" id="download" aria-disabled="true" href="#" tabindex="-1">APKの公開準備中</a>
+<p class="muted" style="font-size:13px">Androidでは、APKの取得後に端末側のインストール確認が必要です。</p>
+</section>
+<section class="panel">
+<h2>更新方法</h2>
+<ol><li>アプリ内の「更新を確認」ボタンを押す。</li>
+<li>新しいバージョンがあれば、ダウンロードを承認する。</li>
+<li>Androidの更新確認画面で「インストール」を押す。</li></ol>
+<div class="info"><strong>初回の更新対応版への切り替えについて</strong><div class="muted">これまでのデバッグ版は署名が継続保証されていないため、更新対応版を別アプリとして導入する予定です。旧アプリを削除する前に未送信の録音を確認してください。初回のみ6桁コードで再登録が必要です。</div></div>
+</section>
+<section class="panel">
+<h2>セキュリティと配布</h2>
+<p>アプリの公開配布と、通話サーバーへの接続認証は別です。APKを取得しても、6桁コードによる端末登録を完了しなければインターネット通話には参加できません。</p>
+<p>配布はGitHub Releasesを利用し、アプリ側では公開するSHA-256値を検証します。</p>
+</section>
+<footer><a href="https://github.com/beeflat-dotcom/mywatch-home2/releases">公開履歴（GitHub Releases）</a> · © びーふらっと</footer>
+</main>
+<script>
+(async()=>{
+ const state=document.getElementById("state");
+ try{
+  const response=await fetch("./latest.json",{cache:"no-store"});
+  if(!response.ok)throw Error("HTTP "+response.status);
+  const data=await response.json();
+  document.getElementById("version").textContent=data.versionName||"未公開";
+  document.getElementById("published").textContent=data.publishedAt?("公開日："+data.publishedAt):"";
+  document.getElementById("changes").textContent=data.notes||"";
+  if(data.available===true && typeof data.apkUrl==="string" && data.apkUrl.startsWith("https://github.com/beeflat-dotcom/mywatch-home2/releases/download/")){
+    const dl=document.getElementById("download");
+    dl.href=data.apkUrl;dl.textContent="最新版APKをダウンロード";dl.removeAttribute("aria-disabled");dl.removeAttribute("tabindex");
+    state.textContent="最新版を配布中";
+  }else{state.textContent="更新対応版の公開準備中";}
+ }catch(e){state.textContent="更新情報を取得できません";document.getElementById("version").textContent="確認失敗";}
+})();
+</script>
+</body></html>
