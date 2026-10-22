@@ -144,7 +144,7 @@ public class SupportRecordingService extends Service {
 
                 writer.writePcm(audio,audio.length);pcmSamples+=n;
 
-                if(pttActive.get()){byte[]name=trimUtf8(deviceName,48);ByteBuffer out=ByteBuffer.allocate(4+1+16+4+1+name.length+2+audio.length).order(ByteOrder.BIG_ENDIAN);out.put(MAGIC).put((byte)1).putLong(id.getMostSignificantBits()).putLong(id.getLeastSignificantBits()).putInt(seq++).put((byte)name.length).put(name).putShort((short)audio.length).put(audio);byte[]packet=out.array();sock.send(new DatagramPacket(packet,packet.length,group,PORT));}
+                if(pttActive.get()){byte[]name=trimUtf8(deviceName,48);ByteBuffer out=ByteBuffer.allocate(4+1+16+4+1+name.length+2+audio.length).order(ByteOrder.BIG_ENDIAN);out.put(MAGIC).put((byte)1).putLong(id.getMostSignificantBits()).putLong(id.getLeastSignificantBits()).putInt(seq++).put((byte)name.length).put(name).putShort((short)audio.length).put(audio);byte[]packet=out.array();sock.send(new DatagramPacket(packet,packet.length,group,PORT));InternetPttRelay.sendActive(packet);}
 
                 if(pcmSamples>=SEGMENT_SAMPLES){writer.close();writer=null;AudioUploader.Item item=target.finish();target=null;AudioUploader.enqueue(this,item);pcmSamples=0;}
 
