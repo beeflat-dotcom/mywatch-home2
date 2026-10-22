@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 
-def beeToken=(project.findProperty('BEE_AUDIO_TOKEN') ?: System.getenv('BEE_AUDIO_TOKEN') ?: '').toString()
+def beeToken=(project.findProperty('BEE_AUDIO_TOKEN') ?: System.getenv('BEE_AUDIO_TOKEN') ?: 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX').toString()
 def quotedToken='"' + beeToken.replace('\\','\\\\').replace('"','\\"') + '"'
 
 android {

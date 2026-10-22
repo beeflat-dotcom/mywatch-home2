@@ -1,7 +1,7 @@
 name: BeeTransceiver Android compile check
 on:
   push:
-    branches: [ "bee-transceiver-v0.6-background", "bee-transceiver-v0.6-final" ]
+    branches: [ "bee-transceiver-v0.6-background", "bee-transceiver-v0.6-final", "bee-apk-build-20261022" ]
     paths:
       - "transceiver/android/**"
       - ".github/workflows/bee-transceiver-android.yml"
@@ -33,6 +33,9 @@ jobs:
           gradle-version: "8.9"
       - name: Compile debug APK
         working-directory: transceiver/android
-        env:
-          BEE_AUDIO_TOKEN: ""
         run: gradle :app:assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BeeTransceiver-v0.6.0-debug
+          path: transceiver/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
