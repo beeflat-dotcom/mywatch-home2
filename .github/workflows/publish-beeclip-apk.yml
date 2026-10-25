@@ -21,6 +21,13 @@ jobs:
           xxd -r -p downloads/BeeClip.apk.hex downloads/BeeClip.apk
           test "$(head -c 2 downloads/BeeClip.apk)" = "PK"
           test "$(stat -c%s downloads/BeeClip.apk)" -eq 31900
+      - name: Upload BeeClip APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BeeClip-APK
+          path: downloads/BeeClip.apk
+          retention-days: 1
+
       - name: Commit APK
         run: |
           git config user.name "github-actions[bot]"
