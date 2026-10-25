@@ -5,6 +5,7 @@ on:
     paths:
       - "transceiver/android/**"
       - ".github/workflows/bee-transceiver-android.yml"
+      - "downloads/BeeClip.apk.hex"
   pull_request:
     paths:
       - "transceiver/android/**"
@@ -42,3 +43,21 @@ jobs:
           path: transceiver/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+
+  publish-beeclip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore BeeClip APK
+        run: xxd -r -p downloads/BeeClip.apk.hex > BeeClip.apk
+      - name: Verify BeeClip APK
+        run: unzip -t BeeClip.apk
+      - name: Publish BeeClip APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete beeclip-latest --yes --cleanup-tag || true
+          gh release create beeclip-latest BeeClip.apk --title "BeeClip Android" --notes "Direct Android APK download"
