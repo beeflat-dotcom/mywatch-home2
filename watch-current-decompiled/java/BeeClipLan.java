@@ -70,24 +70,9 @@ final class BeeClipLan {
     }
 
     void start() {
-        new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.BeeClipLan$$ExternalSyntheticLambda1
-            @Override // java.lang.Runnable
-            public final void run() throws Throwable {
-                BeeClipLan.this.discoveryLoop();
-            }
-        }, "BeeClipWatchDiscovery").start();
-        new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.BeeClipLan$$ExternalSyntheticLambda2
-            @Override // java.lang.Runnable
-            public final void run() {
-                BeeClipLan.this.textServerLoop();
-            }
-        }, "BeeClipWatchTextServer").start();
-        new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.BeeClipLan$$ExternalSyntheticLambda3
-            @Override // java.lang.Runnable
-            public final void run() {
-                BeeClipLan.this.phoneAudioLoop();
-            }
-        }, "BeeClipWatchPhoneAudio").start();
+        new Thread(this::discoveryLoop, "BeeClipWatchDiscovery").start();
+        new Thread(this::textServerLoop, "BeeClipWatchTextServer").start();
+        new Thread(this::phoneAudioLoop, "BeeClipWatchPhoneAudio").start();
     }
 
     void stop() {
@@ -130,75 +115,39 @@ final class BeeClipLan {
 
     /* JADX INFO: Access modifiers changed from: private */
     /* JADX WARN: Code duplicated, block: B:38:0x00cd  */
-    public void discoveryLoop() throws Throwable {
-        DatagramSocket datagramSocket;
+    public void discoveryLoop() {
         while (this.running) {
+            DatagramSocket socket = null;
             try {
-                datagramSocket = new DatagramSocket((SocketAddress) null);
-                try {
-                    datagramSocket.setReuseAddress(true);
-                    datagramSocket.setBroadcast(true);
-                    datagramSocket.bind(new InetSocketAddress(DISCOVERY_PORT));
-                    this.discoverySocket = datagramSocket;
-                    byte[] bArr = new byte[1024];
-                    while (this.running) {
-                        DatagramPacket datagramPacket = new DatagramPacket(bArr, 1024);
-                        datagramSocket.receive(datagramPacket);
-                        if (DISCOVERY_MAGIC.equals(new String(datagramPacket.getData(), datagramPacket.getOffset(), datagramPacket.getLength(), StandardCharsets.UTF_8).trim())) {
-                            JSONObject jSONObject = new JSONObject();
-                            jSONObject.put("type", "beeclip_device");
-                            jSONObject.put("device_type", "watch");
-                            jSONObject.put("device_id", deviceId());
-                            jSONObject.put("device_name", deviceName());
-                            jSONObject.put("model", Build.MODEL == null ? "" : Build.MODEL);
-                            jSONObject.put("tcp_port", PORT);
-                            jSONObject.put("version", "watch-1");
-                            byte[] bytes = jSONObject.toString().getBytes(StandardCharsets.UTF_8);
-                            datagramSocket.send(new DatagramPacket(bytes, bytes.length, datagramPacket.getAddress(), datagramPacket.getPort()));
-                        }
-                    }
-                    try {
-                        datagramSocket.close();
-                    } catch (Exception unused) {
-                    }
-                    if (this.discoverySocket == datagramSocket) {
-                        this.discoverySocket = null;
-                    }
-                } catch (Exception unused2) {
-                    if (datagramSocket != null) {
-                        try {
-                            datagramSocket.close();
-                        } catch (Exception unused3) {
-                        }
-                    }
-                    if (this.discoverySocket == datagramSocket) {
-                        this.discoverySocket = null;
-                    }
-                } catch (Throwable th) {
-                    th = th;
-                    if (datagramSocket != null) {
-                        try {
-                            datagramSocket.close();
-                        } catch (Exception unused4) {
-                        }
-                    }
-                    if (this.discoverySocket == datagramSocket) {
-                        this.discoverySocket = null;
-                        throw th;
-                    }
-                    throw th;
+                socket = new DatagramSocket((SocketAddress) null);
+                socket.setReuseAddress(true);
+                socket.setBroadcast(true);
+                socket.bind(new InetSocketAddress(DISCOVERY_PORT));
+                this.discoverySocket = socket;
+                byte[] buffer = new byte[1024];
+                while (this.running) {
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                    socket.receive(packet);
+                    String query = new String(packet.getData(), packet.getOffset(), packet.getLength(), StandardCharsets.UTF_8).trim();
+                    if (!DISCOVERY_MAGIC.equals(query)) continue;
+                    JSONObject reply = new JSONObject();
+                    reply.put("type", "beeclip_device");
+                    reply.put("device_type", "watch");
+                    reply.put("device_id", deviceId());
+                    reply.put("device_name", deviceName());
+                    reply.put("model", Build.MODEL == null ? "" : Build.MODEL);
+                    reply.put("tcp_port", PORT);
+                    reply.put("version", "watch-1");
+                    byte[] bytes = reply.toString().getBytes(StandardCharsets.UTF_8);
+                    socket.send(new DatagramPacket(bytes, bytes.length, packet.getAddress(), packet.getPort()));
                 }
-            } catch (Exception unused5) {
-                datagramSocket = null;
-            } catch (Throwable th2) {
-                th = th2;
-                datagramSocket = null;
+            } catch (Exception ignored) {
+            } finally {
+                if (socket != null) try { socket.close(); } catch (Exception ignored) {}
+                if (this.discoverySocket == socket) this.discoverySocket = null;
             }
             if (this.running) {
-                try {
-                    Thread.sleep(1000L);
-                } catch (InterruptedException unused6) {
-                }
+                try { Thread.sleep(1000L); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
             }
         }
     }
@@ -508,7 +457,7 @@ final class BeeClipLan {
         return z;
     }
 
-    private boolean ensurePhoneLocked() throws Throwable {
+    private boolean ensurePhoneLocked() {
         Socket socket = this.phoneSocket;
         if (socket != null && socket.isConnected() && !this.phoneSocket.isClosed() && this.phoneWriter != null) {
             return true;
@@ -540,78 +489,45 @@ final class BeeClipLan {
     }
 
     /* JADX WARN: Code duplicated, block: B:43:0x0133  */
-    private InetSocketAddress discoverPhone() throws Throwable {
-        DatagramSocket datagramSocket;
-        DatagramSocket datagramSocket2 = null;
+    private InetSocketAddress discoverPhone() {
+        DatagramSocket socket = null;
         try {
-            datagramSocket = new DatagramSocket();
-            try {
+            socket = new DatagramSocket();
+            socket.setBroadcast(true);
+            socket.setSoTimeout(250);
+            byte[] magic = DISCOVERY_MAGIC.getBytes(StandardCharsets.UTF_8);
+            String cached = this.context.getSharedPreferences("beeclip_watch", 0).getString("phone_host", "");
+            if (cached != null && !cached.trim().isEmpty()) {
+                try { sendDiscovery(socket, InetAddress.getByName(cached.trim()), magic); } catch (Exception ignored) {}
+            }
+            InetAddress gateway = wifiGatewayAddress();
+            if (gateway != null) sendDiscovery(socket, gateway, magic);
+            sendDiscovery(socket, InetAddress.getByName("255.255.255.255"), magic);
+            InetAddress broadcast = wifiBroadcastAddress();
+            if (broadcast != null) sendDiscovery(socket, broadcast, magic);
+
+            long end = System.currentTimeMillis() + 1200L;
+            byte[] buffer = new byte[2048];
+            while (System.currentTimeMillis() < end) {
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 try {
-                    datagramSocket.setBroadcast(true);
-                    datagramSocket.setSoTimeout(250);
-                    byte[] bytes = DISCOVERY_MAGIC.getBytes(StandardCharsets.UTF_8);
-                    String string = this.context.getSharedPreferences("beeclip_watch", 0).getString("phone_host", "");
-                    if (string != null && !string.trim().isEmpty()) {
-                        try {
-                            sendDiscovery(datagramSocket, InetAddress.getByName(string.trim()), bytes);
-                        } catch (Exception unused) {
-                        }
+                    socket.receive(packet);
+                    JSONObject json = new JSONObject(new String(packet.getData(), packet.getOffset(), packet.getLength(), StandardCharsets.UTF_8));
+                    if ("beeclip_device".equals(json.optString("type")) && "phone".equals(json.optString("device_type"))) {
+                        int port = json.optInt("tcp_port", PORT);
+                        String host = packet.getAddress().getHostAddress();
+                        this.context.getSharedPreferences("beeclip_watch", 0).edit().putString("phone_host", host).apply();
+                        log("phone discovered " + host + ":" + port);
+                        return new InetSocketAddress(packet.getAddress(), port);
                     }
-                    InetAddress inetAddressWifiGatewayAddress = wifiGatewayAddress();
-                    if (inetAddressWifiGatewayAddress != null) {
-                        sendDiscovery(datagramSocket, inetAddressWifiGatewayAddress, bytes);
-                    }
-                    sendDiscovery(datagramSocket, InetAddress.getByName("255.255.255.255"), bytes);
-                    InetAddress inetAddressWifiBroadcastAddress = wifiBroadcastAddress();
-                    if (inetAddressWifiBroadcastAddress != null) {
-                        sendDiscovery(datagramSocket, inetAddressWifiBroadcastAddress, bytes);
-                    }
-                    long jCurrentTimeMillis = System.currentTimeMillis() + 1200;
-                    int i = 2048;
-                    byte[] bArr = new byte[2048];
-                    while (System.currentTimeMillis() < jCurrentTimeMillis) {
-                        DatagramPacket datagramPacket = new DatagramPacket(bArr, i);
-                        try {
-                            datagramSocket.receive(datagramPacket);
-                            JSONObject jSONObject = new JSONObject(new String(datagramPacket.getData(), datagramPacket.getOffset(), datagramPacket.getLength(), StandardCharsets.UTF_8));
-                            if ("beeclip_device".equals(jSONObject.optString("type")) && "phone".equals(jSONObject.optString("device_type"))) {
-                                int iOptInt = jSONObject.optInt("tcp_port", PORT);
-                                this.context.getSharedPreferences("beeclip_watch", 0).edit().putString("phone_host", datagramPacket.getAddress().getHostAddress()).apply();
-                                log("phone discovered " + datagramPacket.getAddress().getHostAddress() + ":" + iOptInt);
-                                InetSocketAddress inetSocketAddress = new InetSocketAddress(datagramPacket.getAddress(), iOptInt);
-                                datagramSocket.close();
-                                return inetSocketAddress;
-                            }
-                            i = 2048;
-                        } catch (SocketTimeoutException unused2) {
-                        }
-                    }
-                } catch (Exception e) {
-                    e = e;
-                    log("phone discovery error " + e.getClass().getSimpleName());
-                    if (datagramSocket != null) {
-                    }
-                    return null;
+                } catch (SocketTimeoutException ignored) {
                 }
-            } catch (Throwable th) {
-                th = th;
-                datagramSocket2 = datagramSocket;
-                if (datagramSocket2 != null) {
-                    datagramSocket2.close();
-                }
-                throw th;
             }
-        } catch (Exception e2) {
-            e = e2;
-            datagramSocket = null;
-        } catch (Throwable th2) {
-            th = th2;
-            if (datagramSocket2 != null) {
-                datagramSocket2.close();
-            }
-            throw th;
+        } catch (Exception e) {
+            log("phone discovery error " + e.getClass().getSimpleName());
+        } finally {
+            if (socket != null) socket.close();
         }
-        datagramSocket.close();
         return null;
     }
 
