@@ -1,0 +1,30 @@
+name: Inspect watch home source
+on:
+  push:
+    branches: [ "watch-recording-button-20261026" ]
+    paths:
+      - "watch-home-src/**"
+      - ".github/workflows/watch-home-inspect.yml"
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/watchsrc
+          cat watch-home-src/source.part00 watch-home-src/source.part01 | tr -d '\r\n' | base64 -d > /tmp/watchsrc/source.zip
+          unzip -q /tmp/watchsrc/source.zip -d /tmp/watchsrc/unpacked
+          find /tmp/watchsrc/unpacked -maxdepth 5 -type f | sort | head -200
+      - name: Find PTT button
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== MATCHES ==="
+          grep -R -n -C 12 "押して話す" /tmp/watchsrc/unpacked || true
+          echo "=== PACKAGE ==="
+          grep -R -n "applicationId\|namespace\|versionCode\|versionName" /tmp/watchsrc/unpacked --include='*.gradle*' || true
+          echo "=== SIGNING ==="
+          grep -R -n "signingConfig\|storeFile\|keyAlias" /tmp/watchsrc/unpacked --include='*.gradle*' || true
