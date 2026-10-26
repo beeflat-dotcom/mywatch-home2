@@ -74,13 +74,13 @@ public final class PttService extends Service {
     private final Runnable retryTask = new Runnable() { // from class: jp.beeflat.watchhomeptt.PttService$$ExternalSyntheticLambda2
         @Override // java.lang.Runnable
         public final void run() {
-            this.f$0.lambda$new$0();
+            PttService.this.lambda$new$0();
         }
     };
     private final Runnable talkTimeout = new Runnable() { // from class: jp.beeflat.watchhomeptt.PttService$$ExternalSyntheticLambda3
         @Override // java.lang.Runnable
         public final void run() {
-            this.f$0.lambda$new$1();
+            PttService.this.lambda$new$1();
         }
     };
     private final Object soundGuard = new Object();
@@ -397,7 +397,7 @@ public final class PttService extends Service {
             new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.PttService$$ExternalSyntheticLambda5
                 @Override // java.lang.Runnable
                 public final void run() {
-                    this.f$0.lambda$connect$3();
+                    PttService.this.lambda$connect$3();
                 }
             }, "PTT-Connect").start();
         }
@@ -559,7 +559,7 @@ public final class PttService extends Service {
         Thread thread = new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.PttService$$ExternalSyntheticLambda1
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.lambda$startPlayer$4();
+                PttService.this.lambda$startPlayer$4();
             }
         }, "PTT-AudioPlayback");
         this.player = thread;
@@ -585,7 +585,7 @@ public final class PttService extends Service {
         Thread thread = new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.PttService$$ExternalSyntheticLambda4
             @Override // java.lang.Runnable
             public final void run() throws Throwable {
-                this.f$0.lambda$startTalk$5();
+                PttService.this.lambda$startTalk$5();
             }
         }, "PTT-Transmit");
         this.sender = thread;
