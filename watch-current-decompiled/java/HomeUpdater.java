@@ -59,14 +59,14 @@ final class HomeUpdater {
         alertDialogCreate.setButton(-2, "中止", new DialogInterface.OnClickListener() { // from class: jp.beeflat.watchhomeptt.HomeUpdater$$ExternalSyntheticLambda0
             @Override // android.content.DialogInterface.OnClickListener
             public final void onClick(DialogInterface dialogInterface, int i) {
-                this.f$0.lambda$begin$0(dialogInterface, i);
+                HomeUpdater.this.lambda$begin$0(dialogInterface, i);
             }
         });
         alertDialogCreate.show();
         this.worker.execute(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeUpdater$$ExternalSyntheticLambda1
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.lambda$begin$2(str, strTrim, alertDialogCreate);
+                HomeUpdater.this.lambda$begin$2(str, strTrim, alertDialogCreate);
             }
         });
     }
@@ -123,7 +123,7 @@ final class HomeUpdater {
             this.owner.runOnUiThread(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeUpdater$$ExternalSyntheticLambda2
                 @Override // java.lang.Runnable
                 public final void run() {
-                    this.f$0.lambda$begin$1(alertDialog, file2, str3);
+                    HomeUpdater.this.lambda$begin$1(alertDialog, file2, str3);
                 }
             });
         } catch (AlreadyUpdated e3) {
@@ -329,7 +329,7 @@ final class HomeUpdater {
             new AlertDialog.Builder(this.owner).setTitle("インストール許可").setMessage("このホームアプリからのインストールを許可してください。").setPositiveButton("設定を開く", new DialogInterface.OnClickListener() { // from class: jp.beeflat.watchhomeptt.HomeUpdater$$ExternalSyntheticLambda3
                 @Override // android.content.DialogInterface.OnClickListener
                 public final void onClick(DialogInterface dialogInterface, int i) {
-                    this.f$0.lambda$install$3(dialogInterface, i);
+                    HomeUpdater.this.lambda$install$3(dialogInterface, i);
                 }
             }).setNegativeButton("後で", (DialogInterface.OnClickListener) null).show();
             return;
