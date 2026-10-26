@@ -2,12 +2,12 @@ package jp.beeflat.watchhomeptt;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import android.widget.Toast;
 import androidx.core.content.FileProvider;
 import java.io.ByteArrayOutputStream;
@@ -22,329 +22,209 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import kotlin.UByte;
 import org.json.JSONObject;
 
-/* JADX INFO: loaded from: classes.dex */
 final class HomeUpdater {
-    private static final long LIMIT = 67108864;
-    private volatile boolean busy;
+    private static final long LIMIT = 64L * 1024L * 1024L;
     private final Activity owner;
-    private File pending;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private volatile boolean busy;
+    private volatile boolean cancelled;
+    private File pending;
 
-    HomeUpdater(Activity activity) {
-        this.owner = activity;
-    }
+    HomeUpdater(Activity activity) { this.owner = activity; }
 
-    boolean isBusy() {
-        return this.busy;
-    }
-
-    void begin(final String str) {
-        if (this.busy) {
-            return;
-        }
-        if (str == null || !str.startsWith("https://")) {
+    void begin(String manifestUrl) {
+        if (busy) return;
+        if (manifestUrl == null || !manifestUrl.startsWith("https://")) {
             toast("更新情報のHTTPS URLを設定してください");
             return;
         }
-        final String strTrim = this.owner.getSharedPreferences("ptt", 0).getString("token", "").trim();
-        if (strTrim.isEmpty()) {
+        final String token = owner.getSharedPreferences("ptt", 0).getString("token", "").trim();
+        if (token.isEmpty()) {
             toast("先に6桁コードで接続登録してください");
             return;
         }
-        this.busy = true;
-        final AlertDialog alertDialogCreate = new AlertDialog.Builder(this.owner).setTitle("アプリ更新").setMessage("更新を確認しています。").setCancelable(false).create();
-        alertDialogCreate.setButton(-2, "中止", new DialogInterface.OnClickListener() { // from class: jp.beeflat.watchhomeptt.HomeUpdater$$ExternalSyntheticLambda0
-            @Override // android.content.DialogInterface.OnClickListener
-            public final void onClick(DialogInterface dialogInterface, int i) {
-                HomeUpdater.this.lambda$begin$0(dialogInterface, i);
-            }
-        });
-        alertDialogCreate.show();
-        this.worker.execute(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeUpdater$$ExternalSyntheticLambda1
-            @Override // java.lang.Runnable
-            public final void run() {
-                HomeUpdater.this.lambda$begin$2(str, strTrim, alertDialogCreate);
-            }
-        });
-    }
+        busy = true;
+        cancelled = false;
+        AlertDialog dialog = new AlertDialog.Builder(owner)
+                .setTitle("アプリ更新")
+                .setMessage("更新を確認しています。")
+                .setCancelable(false)
+                .setNegativeButton("中止", (d, w) -> cancelled = true)
+                .create();
+        dialog.show();
 
-    /* JADX INFO: Access modifiers changed from: private */
-    public /* synthetic */ void lambda$begin$0(DialogInterface dialogInterface, int i) {
-        this.busy = false;
-    }
-
-    /* JADX INFO: Access modifiers changed from: private */
-    public /* synthetic */ void lambda$begin$2(String str, String str2, final AlertDialog alertDialog) {
-        String simpleName;
-        File file = null;
-        final String str3 = null;
-        file = null;
-        try {
-            JSONObject jSONObject = new JSONObject(readText(str, 131072, str2));
-            int i = jSONObject.getInt("version_code");
-            PackageInfo packageInfo = this.owner.getPackageManager().getPackageInfo(this.owner.getPackageName(), 0);
-            if (i <= packageInfo.versionCode) {
-                throw new AlreadyUpdated("すでに最新版です (v" + packageInfo.versionName + ")");
-            }
-            String string = jSONObject.getString("apk_url");
-            String string2 = jSONObject.getString("sha256");
-            if (string.startsWith("/")) {
-                URL url = new URL(str);
-                string = new URL(url.getProtocol(), url.getHost(), url.getPort(), string).toString();
-            }
-            if (!string.startsWith("https://") || !string2.matches("[0-9a-fA-F]{64}")) {
-                throw new IOException("配布情報が不正です");
-            }
-            final File file2 = new File(new File(this.owner.getCacheDir(), "updates"), "candidate.apk");
+        worker.execute(() -> {
+            File candidate = null;
+            String error = null;
             try {
-                if (!file2.getParentFile().exists() && !file2.getParentFile().mkdirs()) {
-                    throw new IOException("保存領域がありません");
+                JSONObject meta = new JSONObject(readText(manifestUrl, 128 * 1024, token));
+                int versionCode = meta.getInt("version_code");
+                PackageInfo installed = owner.getPackageManager().getPackageInfo(owner.getPackageName(), PackageManager.GET_SIGNATURES);
+                if (versionCode <= installed.versionCode) throw new AlreadyUpdated("すでに最新版です (v" + installed.versionName + ")");
+
+                String apkUrl = meta.getString("apk_url");
+                String expectedSha = meta.getString("sha256");
+                if (apkUrl.startsWith("/")) {
+                    URL base = new URL(manifestUrl);
+                    apkUrl = new URL(base.getProtocol(), base.getHost(), base.getPort(), apkUrl).toString();
                 }
-                download(string, file2, string2, str2);
-                verify(file2);
+                if (!apkUrl.startsWith("https://") || !expectedSha.matches("[0-9a-fA-F]{64}")) {
+                    throw new IOException("配布情報が不正です");
+                }
+
+                candidate = new File(new File(owner.getCacheDir(), "updates"), "candidate.apk");
+                File parent = candidate.getParentFile();
+                if (!parent.exists() && !parent.mkdirs()) throw new IOException("保存領域がありません");
+                download(apkUrl, candidate, expectedSha, token);
+                verify(candidate);
             } catch (AlreadyUpdated e) {
-                file = file2;
-                e = e;
-                simpleName = e.getMessage();
-                File file3 = file;
-                str3 = simpleName;
-                file2 = file3;
-            } catch (Exception e2) {
-                file = file2;
-                e = e2;
-                simpleName = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-                File file4 = file;
-                str3 = simpleName;
-                file2 = file4;
+                error = e.getMessage();
+            } catch (Exception e) {
+                error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             }
-            this.owner.runOnUiThread(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeUpdater$$ExternalSyntheticLambda2
-                @Override // java.lang.Runnable
-                public final void run() {
-                    HomeUpdater.this.lambda$begin$1(alertDialog, file2, str3);
+            final File result = candidate;
+            final String finalError = error;
+            owner.runOnUiThread(() -> {
+                dialog.dismiss();
+                busy = false;
+                if (cancelled) {
+                    if (result != null) result.delete();
+                    return;
                 }
+                if (finalError != null) {
+                    if (result != null) result.delete();
+                    toast(finalError.startsWith("すでに最新版") ? finalError : "更新不可: " + finalError);
+                    return;
+                }
+                pending = result;
+                requestInstall();
             });
-        } catch (AlreadyUpdated e3) {
-            e = e3;
-        } catch (Exception e4) {
-            e = e4;
-        }
-    }
-
-    /* JADX INFO: Access modifiers changed from: private */
-    public /* synthetic */ void lambda$begin$1(AlertDialog alertDialog, File file, String str) {
-        alertDialog.dismiss();
-        if (!this.busy) {
-            if (file != null) {
-                file.delete();
-                return;
-            }
-            return;
-        }
-        this.busy = false;
-        if (str == null) {
-            this.pending = file;
-            install();
-            return;
-        }
-        if (file != null) {
-            file.delete();
-        }
-        if (!str.startsWith("すでに最新版")) {
-            str = "更新不可: " + str;
-        }
-        toast(str);
-    }
-
-    private static final class AlreadyUpdated extends IOException {
-        AlreadyUpdated(String str) {
-            super(str);
-        }
-    }
-
-    private String readText(String str, int i, String str2) throws Exception {
-        HttpURLConnection httpURLConnection = (HttpURLConnection) new URL(str).openConnection();
-        httpURLConnection.setConnectTimeout(12000);
-        httpURLConnection.setReadTimeout(60000);
-        httpURLConnection.setInstanceFollowRedirects(false);
-        httpURLConnection.setRequestProperty("Authorization", "Bearer " + str2);
-        try {
-            if (httpURLConnection.getResponseCode() != 200) {
-                throw new IOException("HTTP " + httpURLConnection.getResponseCode());
-            }
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            InputStream inputStream = httpURLConnection.getInputStream();
-            try {
-                byte[] bArr = new byte[8192];
-                while (true) {
-                    int i2 = inputStream.read(bArr);
-                    if (i2 == -1) {
-                        if (inputStream != null) {
-                            inputStream.close();
-                        }
-                        String string = byteArrayOutputStream.toString("UTF-8");
-                        httpURLConnection.disconnect();
-                        return string;
-                    }
-                    if (byteArrayOutputStream.size() + i2 > i) {
-                        throw new IOException("情報が大きすぎます");
-                    }
-                    byteArrayOutputStream.write(bArr, 0, i2);
-                    httpURLConnection.disconnect();
-                    throw th;
-                }
-            } catch (Throwable th) {
-                if (inputStream != null) {
-                    try {
-                        inputStream.close();
-                    } catch (Throwable th2) {
-                        th.addSuppressed(th2);
-                    }
-                }
-                throw th;
-            }
-        } catch (Throwable th3) {
-            httpURLConnection.disconnect();
-            throw th3;
-        }
-    }
-
-    /* JADX WARN: Code duplicated, block: B:64:0x00e3 A[EXC_TOP_SPLITTER, SYNTHETIC] */
-    /* JADX WARN: Code duplicated, block: B:74:? A[Catch: all -> 0x010a, SYNTHETIC, TryCatch #3 {all -> 0x010a, blocks: (B:3:0x0034, B:5:0x003c, B:8:0x0049, B:21:0x007f, B:27:0x008d, B:28:0x0094, B:29:0x0095, B:31:0x00a1, B:32:0x00bb, B:36:0x00cb, B:37:0x00d2, B:54:0x00ec, B:53:0x00e9, B:55:0x00ed, B:56:0x00f2, B:57:0x00f3, B:58:0x0109, B:49:0x00e3, B:9:0x0053, B:19:0x007a, B:45:0x00de, B:44:0x00db), top: B:68:0x0034, inners: #1, #4 }] */
-    private void download(String str, File file, String str2, String str3) throws Exception {
-        HttpURLConnection httpURLConnection = (HttpURLConnection) new URL(str).openConnection();
-        httpURLConnection.setConnectTimeout(12000);
-        httpURLConnection.setReadTimeout(60000);
-        httpURLConnection.setInstanceFollowRedirects(false);
-        httpURLConnection.setRequestProperty("Authorization", "Bearer " + str3);
-        try {
-            if (httpURLConnection.getResponseCode() != 200) {
-                throw new IOException("APK HTTP " + httpURLConnection.getResponseCode());
-            }
-            long contentLengthLong = httpURLConnection.getContentLengthLong();
-            if (contentLengthLong > LIMIT) {
-                throw new IOException("APKが大きすぎます");
-            }
-            MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-            InputStream inputStream = httpURLConnection.getInputStream();
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                try {
-                    byte[] bArr = new byte[16384];
-                    long j = 0;
-                    while (true) {
-                        int i = inputStream.read(bArr);
-                        if (i == -1) {
-                            fileOutputStream.close();
-                            if (inputStream != null) {
-                                inputStream.close();
-                            }
-                            if (contentLengthLong > 0 && j != contentLengthLong) {
-                                throw new IOException("APK転送が不完全です");
-                            }
-                            StringBuilder sb = new StringBuilder();
-                            for (byte b : messageDigest.digest()) {
-                                sb.append(String.format(Locale.ROOT, "%02x", Integer.valueOf(b & UByte.MAX_VALUE)));
-                            }
-                            if (!str2.equalsIgnoreCase(sb.toString())) {
-                                throw new IOException("SHA-256が一致しません");
-                            }
-                            httpURLConnection.disconnect();
-                            return;
-                        }
-                        j += (long) i;
-                        if (j > LIMIT) {
-                            throw new IOException("APKが大きすぎます");
-                        }
-                        fileOutputStream.write(bArr, 0, i);
-                        messageDigest.update(bArr, 0, i);
-                        if (inputStream != null) {
-                            throw th;
-                        }
-                        try {
-                            inputStream.close();
-                            throw th;
-                        } catch (Throwable th) {
-                            th.addSuppressed(th);
-                            throw th;
-                        }
-                    }
-                } catch (Throwable th2) {
-                    try {
-                        fileOutputStream.close();
-                        throw th2;
-                    } catch (Throwable th3) {
-                        th2.addSuppressed(th3);
-                        throw th2;
-                    }
-                }
-            } catch (Throwable th4) {
-                if (inputStream != null) {
-                    throw th4;
-                }
-                inputStream.close();
-                throw th4;
-            }
-        } catch (Throwable th5) {
-            httpURLConnection.disconnect();
-            throw th5;
-        }
-    }
-
-    private void verify(File file) throws Exception {
-        PackageManager packageManager = this.owner.getPackageManager();
-        PackageInfo packageInfo = packageManager.getPackageInfo(this.owner.getPackageName(), 64);
-        PackageInfo packageArchiveInfo = packageManager.getPackageArchiveInfo(file.getAbsolutePath(), 64);
-        if (packageArchiveInfo == null || packageArchiveInfo.applicationInfo == null) {
-            throw new IOException("APKを解析できません");
-        }
-        if (!packageInfo.packageName.equals(packageArchiveInfo.packageName)) {
-            throw new IOException("旧ホームと異なるアプリIDです。別アプリとして初回導入が必要です");
-        }
-        if (packageArchiveInfo.versionCode <= packageInfo.versionCode) {
-            throw new IOException("新しいバージョンではありません");
-        }
-        if (packageArchiveInfo.applicationInfo.minSdkVersion > Build.VERSION.SDK_INT) {
-            throw new IOException("Android 8.1非対応です");
-        }
-        if (packageInfo.signatures == null || packageArchiveInfo.signatures == null || !Arrays.equals(packageInfo.signatures, packageArchiveInfo.signatures)) {
-            throw new IOException("署名が異なります。旧ホームと同じ鍵でビルドしてください");
-        }
+        });
     }
 
     void resume() {
-        if (this.pending == null || !this.owner.getPackageManager().canRequestPackageInstalls()) {
-            return;
+        if (pending != null && Build.VERSION.SDK_INT >= 26 && owner.getPackageManager().canRequestPackageInstalls()) {
+            launchInstaller();
         }
-        install();
     }
 
-    private void install() {
-        if (this.pending == null) {
+    private void requestInstall() {
+        if (pending == null || !pending.isFile()) return;
+        if (Build.VERSION.SDK_INT >= 26 && !owner.getPackageManager().canRequestPackageInstalls()) {
+            new AlertDialog.Builder(owner)
+                    .setTitle("初回のインストール許可")
+                    .setMessage("設定を開き、このホームアプリからのインストールを許可してください。")
+                    .setPositiveButton("設定を開く", (d, w) -> {
+                        try {
+                            owner.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:" + owner.getPackageName())));
+                        } catch (RuntimeException e) {
+                            toast("端末設定からこのアプリのインストール許可を有効にしてください");
+                        }
+                    })
+                    .setNegativeButton("後で", null)
+                    .show();
             return;
         }
-        if (!this.owner.getPackageManager().canRequestPackageInstalls()) {
-            new AlertDialog.Builder(this.owner).setTitle("インストール許可").setMessage("このホームアプリからのインストールを許可してください。").setPositiveButton("設定を開く", new DialogInterface.OnClickListener() { // from class: jp.beeflat.watchhomeptt.HomeUpdater$$ExternalSyntheticLambda3
-                @Override // android.content.DialogInterface.OnClickListener
-                public final void onClick(DialogInterface dialogInterface, int i) {
-                    HomeUpdater.this.lambda$install$3(dialogInterface, i);
+        launchInstaller();
+    }
+
+    private void launchInstaller() {
+        File apk = pending;
+        if (apk == null || !apk.isFile()) return;
+        pending = null;
+        try {
+            Uri uri = FileProvider.getUriForFile(owner, owner.getPackageName() + ".updates", apk);
+            owner.startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, "application/vnd.android.package-archive")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+        } catch (RuntimeException e) {
+            toast("Androidのインストール画面を開けませんでした");
+        }
+    }
+
+    private String readText(String url, int max, String token) throws Exception {
+        HttpURLConnection c = open(url, token);
+        try {
+            int code = c.getResponseCode();
+            if (code != 200) throw new IOException("HTTP " + code);
+            try (InputStream in = c.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) >= 0) {
+                    if (n == 0) continue;
+                    if (out.size() + n > max) throw new IOException("情報が大きすぎます");
+                    out.write(buf, 0, n);
                 }
-            }).setNegativeButton("後で", (DialogInterface.OnClickListener) null).show();
-            return;
+                return out.toString("UTF-8");
+            }
+        } finally { c.disconnect(); }
+    }
+
+    private void download(String url, File file, String expectedSha, String token) throws Exception {
+        HttpURLConnection c = open(url, token);
+        try {
+            int code = c.getResponseCode();
+            if (code != 200) throw new IOException("APK HTTP " + code);
+            long size = c.getContentLengthLong();
+            if (size > LIMIT) throw new IOException("APKが大きすぎます");
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            long total = 0;
+            try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(file)) {
+                byte[] buf = new byte[16384];
+                int n;
+                while ((n = in.read(buf)) >= 0) {
+                    if (cancelled) throw new IOException("中止しました");
+                    if (n == 0) continue;
+                    total += n;
+                    if (total > LIMIT) throw new IOException("APKが大きすぎます");
+                    out.write(buf, 0, n);
+                    md.update(buf, 0, n);
+                }
+            }
+            if (size > 0 && total != size) throw new IOException("APK転送が不完全です");
+            String actual = hex(md.digest());
+            if (!expectedSha.equalsIgnoreCase(actual)) throw new IOException("SHA-256が一致しません");
+        } finally { c.disconnect(); }
+    }
+
+    private void verify(File apk) throws Exception {
+        PackageManager pm = owner.getPackageManager();
+        PackageInfo installed = pm.getPackageInfo(owner.getPackageName(), PackageManager.GET_SIGNATURES);
+        PackageInfo candidate = pm.getPackageArchiveInfo(apk.getAbsolutePath(), PackageManager.GET_SIGNATURES);
+        if (candidate == null || candidate.applicationInfo == null) throw new IOException("APKを解析できません");
+        if (!installed.packageName.equals(candidate.packageName)) throw new IOException("旧ホームと異なるアプリIDです");
+        if (candidate.versionCode <= installed.versionCode) throw new IOException("新しいバージョンではありません");
+        if (candidate.applicationInfo.minSdkVersion > Build.VERSION.SDK_INT) throw new IOException("Android 8.1非対応です");
+        if (installed.signatures == null || candidate.signatures == null ||
+                !Arrays.equals(installed.signatures, candidate.signatures)) {
+            throw new IOException("APKの署名が現在のホームと一致しません");
         }
-        File file = this.pending;
-        this.pending = null;
-        this.owner.startActivity(new Intent("android.intent.action.VIEW").setDataAndType(FileProvider.getUriForFile(this.owner, this.owner.getPackageName() + ".updates", file), "application/vnd.android.package-archive").addFlags(1));
     }
 
-    /* JADX INFO: Access modifiers changed from: private */
-    public /* synthetic */ void lambda$install$3(DialogInterface dialogInterface, int i) {
-        this.owner.startActivity(new Intent("android.settings.MANAGE_UNKNOWN_APP_SOURCES").setData(Uri.parse("package:" + this.owner.getPackageName())));
+    private HttpURLConnection open(String url, String token) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setConnectTimeout(12000);
+        c.setReadTimeout(60000);
+        c.setInstanceFollowRedirects(false);
+        c.setUseCaches(false);
+        c.setRequestProperty("Authorization", "Bearer " + token);
+        return c;
     }
 
-    private void toast(String str) {
-        Toast.makeText(this.owner, str, 1).show();
+    private static String hex(byte[] bytes) {
+        StringBuilder s = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) s.append(String.format(Locale.ROOT, "%02x", b & 0xff));
+        return s.toString();
+    }
+
+    private void toast(String text) {
+        owner.runOnUiThread(() -> Toast.makeText(owner, text, Toast.LENGTH_LONG).show());
+    }
+
+    private static final class AlreadyUpdated extends IOException {
+        AlreadyUpdated(String message) { super(message); }
     }
 }
