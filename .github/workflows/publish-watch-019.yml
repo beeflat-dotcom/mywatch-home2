@@ -1,0 +1,51 @@
+name: Publish Watch 0.1.9 APK
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/publish-watch-019.yml"
+      - "downloads/watch-update-019/**"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat downloads/watch-update-019/part-* | tr -d '\r\n' | xxd -r -p > downloads/bee-home-ptt-v0.1.9.apk
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          apk = Path("downloads/bee-home-ptt-v0.1.9.apk")
+          meta = json.loads(Path("downloads/watch-update-019/latest.json").read_text())
+          actual = hashlib.sha256(apk.read_bytes()).hexdigest()
+          expected = meta["sha256"]
+          print("sha256", actual)
+          if actual.lower() != expected.lower():
+              raise SystemExit("SHA-256 mismatch")
+          PY
+      - name: Publish APK and public manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp downloads/watch-update-019/latest.json downloads/watch-home-latest.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("downloads/watch-home-latest.json")
+          data=json.loads(p.read_text())
+          data["apk_url"]="https://raw.githubusercontent.com/beeflat-dotcom/mywatch-home2/main/downloads/bee-home-ptt-v0.1.9.apk"
+          p.write_text(json.dumps(data, ensure_ascii=False, separators=(",",":"))+"\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/bee-home-ptt-v0.1.9.apk downloads/watch-home-latest.json
+          git commit -m "Publish watch 0.1.9 APK" || exit 0
+          git push
