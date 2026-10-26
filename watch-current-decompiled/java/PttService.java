@@ -168,151 +168,69 @@ public final class PttService extends Service {
         return "腕時計-" + Build.MODEL;
     }
 
-    static void pair(final Context context, final String str) {
-        new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.PttService$$ExternalSyntheticLambda0
-            @Override // java.lang.Runnable
-            public final void run() throws Throwable {
-                PttService.lambda$pair$2(context, str);
+    static void pair(final Context context, final String code) {
+        new Thread(() -> {
+            HttpURLConnection c = null;
+            try {
+                SharedPreferences prefs = context.getSharedPreferences("ptt", 0);
+                String base = prefs.getString("endpoint", "").trim();
+                if (base.isEmpty()) base = discover();
+                if (!base.startsWith("https://")) throw new IOException("接続URLがありません");
+                c = (HttpURLConnection) new URL(base + "/ptt/pair").openConnection();
+                c.setRequestMethod("POST");
+                c.setDoOutput(true);
+                c.setConnectTimeout(10000);
+                c.setReadTimeout(10000);
+                c.setRequestProperty("Content-Type", "application/json");
+                byte[] body = new JSONObject().put("code", code).toString().getBytes(StandardCharsets.UTF_8);
+                try (OutputStream out = c.getOutputStream()) { out.write(body); }
+                int http = c.getResponseCode();
+                if (http != 200) throw new IOException("ペアリングHTTP " + http);
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                try (InputStream in = c.getInputStream()) {
+                    byte[] b = new byte[2048];
+                    int n;
+                    while ((n = in.read(b)) >= 0 && buffer.size() < 10000) {
+                        if (n > 0) buffer.write(b, 0, n);
+                    }
+                }
+                String token = new JSONObject(buffer.toString("UTF-8")).getString("token");
+                prefs.edit().putString("token", token).putString("endpoint", base).apply();
+                status = "接続登録完了";
+                context.startForegroundService(new Intent(context, PttService.class).setAction(START));
+            } catch (Exception e) {
+                status = "ペアリング失敗: " + e.getMessage();
+            } finally {
+                if (c != null) c.disconnect();
             }
         }, "PTT-Pair").start();
     }
 
-    static /* synthetic */ void lambda$pair$2(Context context, String str) throws Throwable {
-        HttpURLConnection httpURLConnection = null;
-        try {
-            try {
-                SharedPreferences sharedPreferences = context.getSharedPreferences("ptt", 0);
-                String strTrim = sharedPreferences.getString("endpoint", "").trim();
-                if (strTrim.isEmpty()) {
-                    strTrim = discover();
-                }
-                if (!strTrim.startsWith("https://")) {
-                    throw new IOException("接続URLがありません");
-                }
-                HttpURLConnection httpURLConnection2 = (HttpURLConnection) new URL(strTrim + "/ptt/pair").openConnection();
-                try {
-                    httpURLConnection2.setRequestMethod("POST");
-                    httpURLConnection2.setDoOutput(true);
-                    httpURLConnection2.setConnectTimeout(10000);
-                    httpURLConnection2.setReadTimeout(10000);
-                    httpURLConnection2.setRequestProperty("Content-Type", "application/json");
-                    byte[] bytes = new JSONObject().put("code", str).toString().getBytes(StandardCharsets.UTF_8);
-                    OutputStream outputStream = httpURLConnection2.getOutputStream();
-                    try {
-                        outputStream.write(bytes);
-                        if (outputStream != null) {
-                            outputStream.close();
-                        }
-                        if (httpURLConnection2.getResponseCode() != 200) {
-                            throw new IOException("ペアリングHTTP " + httpURLConnection2.getResponseCode());
-                        }
-                        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                        InputStream inputStream = httpURLConnection2.getInputStream();
-                        try {
-                            byte[] bArr = new byte[2048];
-                            while (true) {
-                                int i = inputStream.read(bArr);
-                                if (i == -1 || byteArrayOutputStream.size() >= 10000) {
-                                    break;
-                                } else {
-                                    byteArrayOutputStream.write(bArr, 0, i);
-                                }
-                            }
-                            if (inputStream != null) {
-                                inputStream.close();
-                            }
-                            sharedPreferences.edit().putString("token", new JSONObject(byteArrayOutputStream.toString("UTF-8")).getString("token")).putString("endpoint", strTrim).apply();
-                            context.startForegroundService(new Intent(context, (Class<?>) PttService.class).setAction(START));
-                            if (httpURLConnection2 != null) {
-                                httpURLConnection2.disconnect();
-                            }
-                        } catch (Throwable th) {
-                            if (inputStream != null) {
-                                try {
-                                    inputStream.close();
-                                } catch (Throwable th2) {
-                                    th.addSuppressed(th2);
-                                }
-                            }
-                            throw th;
-                        }
-                    } catch (Throwable th3) {
-                        if (outputStream != null) {
-                            try {
-                                outputStream.close();
-                            } catch (Throwable th4) {
-                                th3.addSuppressed(th4);
-                            }
-                        }
-                        throw th3;
-                    }
-                } catch (Exception e) {
-                    e = e;
-                    httpURLConnection = httpURLConnection2;
-                    status = "ペアリング失敗: " + e.getMessage();
-                    if (httpURLConnection != null) {
-                        httpURLConnection.disconnect();
-                    }
-                } catch (Throwable th5) {
-                    th = th5;
-                    httpURLConnection = httpURLConnection2;
-                    if (httpURLConnection != null) {
-                        httpURLConnection.disconnect();
-                    }
-                    throw th;
-                }
-            } catch (Exception e2) {
-                e = e2;
-            }
-        } catch (Throwable th6) {
-            th = th6;
-        }
-    }
-
     static String discover() throws Exception {
-        HttpURLConnection httpURLConnection = (HttpURLConnection) new URL(DISCOVERY).openConnection();
-        httpURLConnection.setConnectTimeout(6000);
-        httpURLConnection.setReadTimeout(6000);
+        HttpURLConnection c = (HttpURLConnection) new URL(DISCOVERY).openConnection();
+        c.setConnectTimeout(6000);
+        c.setReadTimeout(6000);
+        c.setUseCaches(false);
         try {
-            if (httpURLConnection.getResponseCode() != 200) {
-                throw new IOException("接続先取得HTTP " + httpURLConnection.getResponseCode());
+            int code = c.getResponseCode();
+            if (code != 200) throw new IOException("接続先取得HTTP " + code);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (InputStream in = c.getInputStream()) {
+                byte[] b = new byte[2048];
+                int n;
+                while ((n = in.read(b)) >= 0) {
+                    if (n == 0) continue;
+                    if (out.size() + n > 12000) throw new IOException("接続先情報が大きすぎます");
+                    out.write(b, 0, n);
+                }
             }
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            InputStream inputStream = httpURLConnection.getInputStream();
-            try {
-                byte[] bArr = new byte[2048];
-                while (true) {
-                    int i = inputStream.read(bArr);
-                    if (i == -1 || byteArrayOutputStream.size() >= 12000) {
-                        break;
-                    }
-                    byteArrayOutputStream.write(bArr, 0, i);
-                    httpURLConnection.disconnect();
-                    throw th;
-                }
-                if (inputStream != null) {
-                    inputStream.close();
-                }
-                JSONObject jSONObject = new JSONObject(byteArrayOutputStream.toString("UTF-8"));
-                if (!"running".equalsIgnoreCase(jSONObject.optString("phase"))) {
-                    throw new IOException("公開先停止中");
-                }
-                String strReplaceAll = jSONObject.getString("external_api_url").replaceAll("/+$", "");
-                httpURLConnection.disconnect();
-                return strReplaceAll;
-            } catch (Throwable th) {
-                if (inputStream != null) {
-                    try {
-                        inputStream.close();
-                    } catch (Throwable th2) {
-                        th.addSuppressed(th2);
-                    }
-                }
-                throw th;
-            }
-        } catch (Throwable th3) {
-            httpURLConnection.disconnect();
-            throw th3;
+            JSONObject json = new JSONObject(out.toString("UTF-8"));
+            if (!"running".equalsIgnoreCase(json.optString("phase"))) throw new IOException("公開先停止中");
+            String endpoint = json.getString("external_api_url").replaceAll("/+$", "");
+            if (!endpoint.startsWith("https://")) throw new IOException("HTTPS公開先がありません");
+            return endpoint;
+        } finally {
+            c.disconnect();
         }
     }
 
@@ -584,7 +502,7 @@ public final class PttService extends Service {
         this.playback.clear();
         Thread thread = new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.PttService$$ExternalSyntheticLambda4
             @Override // java.lang.Runnable
-            public final void run() throws Throwable {
+            public final void run() {
                 PttService.this.lambda$startTalk$5();
             }
         }, "PTT-Transmit");
