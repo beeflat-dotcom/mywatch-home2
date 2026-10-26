@@ -16,6 +16,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <permission
         android:name="jp.beeflat.watchhomeptt.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
@@ -46,6 +47,10 @@
         <service
             android:name="jp.beeflat.watchhomeptt.PttService"
             android:exported="false"/>
+        <service
+            android:name="jp.beeflat.watchhomeptt.RecordingUploadJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="true"/>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:exported="false"
