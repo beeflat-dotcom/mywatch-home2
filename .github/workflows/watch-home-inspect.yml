@@ -14,17 +14,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/watchsrc
-          cat watch-home-src/chunk-* | tr -d '\r\n' | base64 -d > /tmp/watchsrc/source.zip
-          unzip -q /tmp/watchsrc/source.zip -d /tmp/watchsrc/unpacked
-          find /tmp/watchsrc/unpacked -maxdepth 7 -type f | sort | head -250
+          cat watch-home-src/chunk-* > /tmp/reconstruct-watch.sh
+          bash /tmp/reconstruct-watch.sh
+          find project -maxdepth 8 -type f | sort | head -250
       - name: Find PTT button
         shell: bash
         run: |
           set -euo pipefail
           echo "=== MATCHES ==="
-          grep -R -n -C 16 "押して話す" /tmp/watchsrc/unpacked || true
+          grep -R -n -C 20 "押して話す" project || true
           echo "=== PACKAGE ==="
-          grep -R -n "applicationId\|namespace\|versionCode\|versionName" /tmp/watchsrc/unpacked --include='*.gradle*' || true
+          grep -R -n "applicationId\|namespace\|versionCode\|versionName" project --include='*.gradle*' || true
           echo "=== SIGNING ==="
-          grep -R -n "signingConfig\|storeFile\|keyAlias" /tmp/watchsrc/unpacked --include='*.gradle*' || true
+          grep -R -n "signingConfig\|storeFile\|keyAlias" project --include='*.gradle*' || true
