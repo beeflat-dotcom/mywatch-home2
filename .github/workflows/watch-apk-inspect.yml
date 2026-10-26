@@ -1,0 +1,30 @@
+name: Inspect current watch APK
+on:
+  push:
+    branches: [ "watch-recording-button-20261026" ]
+    paths:
+      - ".github/workflows/watch-apk-inspect.yml"
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install jadx
+        shell: bash
+        run: |
+          set -euo pipefail
+          api=https://api.github.com/repos/skylot/jadx/releases/latest
+          url=$(curl -fsSL "$api" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["browser_download_url"] for x in d["assets"] if x["name"].endswith(".zip") and "jadx-" in x["name"]))')
+          curl -fsSL "$url" -o /tmp/jadx.zip
+          unzip -q /tmp/jadx.zip -d /tmp/jadx
+      - name: Decompile APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/jadx/bin/jadx -d /tmp/watch-dec downloads/bee-home-ptt-v0.1.9.apk >/tmp/jadx.log 2>&1 || true
+          echo "=== JADX ==="
+          tail -40 /tmp/jadx.log
+          echo "=== BUTTON MATCHES ==="
+          grep -R -n -C 30 "押して話す" /tmp/watch-dec || true
+          echo "=== RECORD MATCHES ==="
+          grep -R -n -C 12 "録音\|AudioRecord\|MediaRecorder\|ptt" /tmp/watch-dec/sources/jp/beeflat/watchhomeptt 2>/dev/null | head -500 || true
