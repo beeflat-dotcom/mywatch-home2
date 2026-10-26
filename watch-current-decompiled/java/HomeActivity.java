@@ -427,18 +427,14 @@ public class HomeActivity extends Activity {
 
     /* JADX INFO: Access modifiers changed from: private */
     public /* synthetic */ void lambda$checkUpdate$8() {
-        final String str;
+        String found;
         try {
-            str = PttService.discover() + "/watch-home/latest.json";
+            found = PttService.discover() + "/watch-home/latest.json";
         } catch (Exception unused) {
-            str = "";
+            found = "";
         }
-        runOnUiThread(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda0
-            @Override // java.lang.Runnable
-            public final void run() {
-                HomeActivity.this.lambda$checkUpdate$7(str);
-            }
-        });
+        final String manifestUrl = found;
+        runOnUiThread(() -> HomeActivity.this.lambda$checkUpdate$7(manifestUrl));
     }
 
     /* JADX INFO: Access modifiers changed from: private */
