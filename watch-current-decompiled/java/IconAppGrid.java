@@ -65,7 +65,7 @@ final class IconAppGrid {
             message(activity, "起動できるアプリがありません");
             return;
         }
-        final Dialog dialog = new Dialog(activity, android.R.style.Theme.Material.NoActionBar);
+        final Dialog dialog = new Dialog(activity, android.R.style.Theme_Material_NoActionBar);
         LinearLayout linearLayout = new LinearLayout(activity);
         int i = 1;
         linearLayout.setOrientation(1);
