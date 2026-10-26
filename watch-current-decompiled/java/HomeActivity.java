@@ -68,7 +68,7 @@ public class HomeActivity extends Activity {
     private final Runnable talkTimeout = new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda4
         @Override // java.lang.Runnable
         public final void run() {
-            this.f$0.stopTalking();
+            HomeActivity.this.stopTalking();
         }
     };
     private final Runnable refresh = new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity.2
@@ -145,7 +145,7 @@ public class HomeActivity extends Activity {
                 this.pendingGesture = new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda5
                     @Override // java.lang.Runnable
                     public final void run() {
-                        this.f$0.lambda$dispatchTouchEvent$0(x);
+                        HomeActivity.this.lambda$dispatchTouchEvent$0(x);
                     }
                 };
                 return true;
@@ -163,7 +163,7 @@ public class HomeActivity extends Activity {
             this.handler.post(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda6
                 @Override // java.lang.Runnable
                 public final void run() {
-                    this.f$0.lambda$dispatchTouchEvent$1();
+                    HomeActivity.this.lambda$dispatchTouchEvent$1();
                 }
             });
             return true;
@@ -310,43 +310,43 @@ public class HomeActivity extends Activity {
         this.talk.setOnClickListener(new View.OnClickListener() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda13
             @Override // android.view.View.OnClickListener
             public final void onClick(View view) {
-                this.f$0.lambda$onCreate$4(view);
+                HomeActivity.this.lambda$onCreate$4(view);
             }
         });
         button(linearLayout, "ログ確認", new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda14
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.showLogs();
+                HomeActivity.this.showLogs();
             }
         });
         button(linearLayout, "アプリ更新", new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda15
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.checkUpdate();
+                HomeActivity.this.checkUpdate();
             }
         });
         button(linearLayout, "アプリ一覧", new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda16
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.showApps();
+                HomeActivity.this.showApps();
             }
         });
         button(linearLayout, "楽天ペイを選び直す", new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda17
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.lambda$onCreate$5();
+                HomeActivity.this.lambda$onCreate$5();
             }
         });
         button(linearLayout, "接続・ペアリング設定", new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda1
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.showPairing();
+                HomeActivity.this.showPairing();
             }
         });
         button(linearLayout, "ホームアプリの変更", new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda2
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.lambda$onCreate$6();
+                HomeActivity.this.lambda$onCreate$6();
             }
         });
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != 0) {
@@ -419,7 +419,7 @@ public class HomeActivity extends Activity {
             new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda9
                 @Override // java.lang.Runnable
                 public final void run() {
-                    this.f$0.lambda$checkUpdate$8();
+                    HomeActivity.this.lambda$checkUpdate$8();
                 }
             }, "HomeUpdateDiscovery").start();
         }
@@ -436,7 +436,7 @@ public class HomeActivity extends Activity {
         runOnUiThread(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda0
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.lambda$checkUpdate$7(str);
+                HomeActivity.this.lambda$checkUpdate$7(str);
             }
         });
     }
@@ -459,7 +459,7 @@ public class HomeActivity extends Activity {
         button(linearLayout, "最新ログ取得", new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda8
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.lambda$showLogs$9(textViewText);
+                HomeActivity.this.lambda$showLogs$9(textViewText);
             }
         });
         new AlertDialog.Builder(this).setTitle("PCログ・端末ログ").setView(linearLayout).setPositiveButton("閉じる", (DialogInterface.OnClickListener) null).show();
@@ -473,7 +473,7 @@ public class HomeActivity extends Activity {
         new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda7
             @Override // java.lang.Runnable
             public final void run() throws Throwable {
-                this.f$0.lambda$loadLogs$11(textView);
+                HomeActivity.this.lambda$loadLogs$11(textView);
             }
         }).start();
     }
@@ -489,7 +489,7 @@ public class HomeActivity extends Activity {
         runOnUiThread(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda10
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.lambda$loadLogs$10(textView, strFetchPcLog);
+                HomeActivity.this.lambda$loadLogs$10(textView, strFetchPcLog);
             }
         });
     }
@@ -640,7 +640,7 @@ public class HomeActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("トランシーバー・ログ接続").setView(linearLayout).setNegativeButton("取消", (DialogInterface.OnClickListener) null).setPositiveButton("接続", new DialogInterface.OnClickListener() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda11
             @Override // android.content.DialogInterface.OnClickListener
             public final void onClick(DialogInterface dialogInterface, int i) {
-                this.f$0.lambda$showPairing$12(editText, dialogInterface, i);
+                HomeActivity.this.lambda$showPairing$12(editText, dialogInterface, i);
             }
         }).show();
     }
