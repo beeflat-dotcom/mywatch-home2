@@ -49,6 +49,7 @@ public class HomeActivity extends Activity {
     private boolean pressing;
     private TextView state;
     private Button talk;
+    private Button recordOnly;
     private HomeUpdater updater;
     private final PaymentSwipe paymentSwipe = new PaymentSwipe();
     private final BroadcastReceiver beeClipReceiver = new BroadcastReceiver() { // from class: jp.beeflat.watchhomeptt.HomeActivity.1
@@ -77,6 +78,7 @@ public class HomeActivity extends Activity {
             if (HomeActivity.this.state != null) {
                 HomeActivity.this.state.setText(PttService.currentState());
             }
+            HomeActivity.this.refreshRecordingButton();
             HomeActivity.this.handler.postDelayed(this, 1000L);
         }
     };
@@ -307,12 +309,22 @@ public class HomeActivity extends Activity {
         button.setTextSize(25.0f);
         this.talk.setMinHeight(dp(130));
         this.talk.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(23, 132, 88)));
-        this.talk.setOnClickListener(new View.OnClickListener() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda13
+        this.talk.setOnClickListener(new View.OnClickListener() { // from class: jp.beeflat.watchhomeptt.HomeActivity$ExternalSyntheticLambda13
             @Override // android.view.View.OnClickListener
             public final void onClick(View view) {
                 HomeActivity.this.lambda$onCreate$4(view);
             }
         });
+        Button recordButton = button(linearLayout, "録音のみ", new Runnable() {
+            @Override public void run() {
+                HomeActivity.this.toggleRecordingOnly();
+            }
+        });
+        this.recordOnly = recordButton;
+        recordButton.setTextSize(25.0f);
+        recordButton.setMinHeight(dp(130));
+        recordButton.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(23, 132, 88)));
+        refreshRecordingButton();
         button(linearLayout, "ログ確認", new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda14
             @Override // java.lang.Runnable
             public final void run() {
@@ -360,6 +372,27 @@ public class HomeActivity extends Activity {
     /* JADX INFO: Access modifiers changed from: private */
     public /* synthetic */ void lambda$onCreate$4(View view) {
         toggleTalking();
+    }
+
+    private void toggleRecordingOnly() {
+        if (checkSelfPermission("android.permission.RECORD_AUDIO") != 0) {
+            requestPermissions(new String[]{"android.permission.RECORD_AUDIO"}, AUDIO_REQUEST);
+            return;
+        }
+        boolean recording = PttService.isRecording();
+        Intent intent = new Intent(this, PttService.class)
+                .setAction(recording ? PttService.RECORD_STOP : PttService.RECORD_START);
+        startForegroundService(intent);
+        this.handler.postDelayed(this::refreshRecordingButton, 150L);
+    }
+
+    private void refreshRecordingButton() {
+        Button button = this.recordOnly;
+        if (button == null) return;
+        boolean recording = PttService.isRecording();
+        button.setText(recording ? "録音中（押して終了）" : "録音のみ");
+        button.setBackgroundTintList(ColorStateList.valueOf(
+                recording ? Color.rgb(180, 48, 48) : Color.rgb(23, 132, 88)));
     }
 
     /* JADX INFO: Access modifiers changed from: private */
