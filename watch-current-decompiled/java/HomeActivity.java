@@ -470,160 +470,63 @@ public class HomeActivity extends Activity {
     /* JADX INFO: renamed from: loadLogs, reason: merged with bridge method [inline-methods] */
     public void lambda$showLogs$9(final TextView textView) {
         textView.setText("PCログ取得中…\n\n端末ログ:\n" + PttService.readEvents(this));
-        new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda7
-            @Override // java.lang.Runnable
-            public final void run() throws Throwable {
-                HomeActivity.this.lambda$loadLogs$11(textView);
-            }
-        }).start();
+        new Thread(() -> {
+            final String pc = fetchPcLog();
+            runOnUiThread(() -> textView.setText(pc + "\n\n端末ログ:\n" + PttService.readEvents(this)));
+        }, "WatchLogFetch").start();
     }
 
-    /* JADX INFO: Access modifiers changed from: private */
-    public /* synthetic */ void lambda$loadLogs$10(TextView textView, String str) {
-        textView.setText(str + "\n\n端末ログ:\n" + PttService.readEvents(this));
-    }
-
-    /* JADX INFO: Access modifiers changed from: private */
-    public /* synthetic */ void lambda$loadLogs$11(final TextView textView) throws Throwable {
-        final String strFetchPcLog = fetchPcLog();
-        runOnUiThread(new Runnable() { // from class: jp.beeflat.watchhomeptt.HomeActivity$$ExternalSyntheticLambda10
-            @Override // java.lang.Runnable
-            public final void run() {
-                HomeActivity.this.lambda$loadLogs$10(textView, strFetchPcLog);
-            }
-        });
-    }
-
-    private String fetchPcLog() throws Throwable {
-        SharedPreferences sharedPreferences = getSharedPreferences("ptt", 0);
-        String string = sharedPreferences.getString("token", "");
-        if (string.isEmpty()) {
-            return "ログ未接続：先に「接続・ペアリング設定」で6桁コードを登録してください。";
-        }
-        HttpURLConnection httpURLConnection = null;
+    private String fetchPcLog() {
+        SharedPreferences prefs = getSharedPreferences("ptt", 0);
+        String token = prefs.getString("token", "");
+        if (token.isEmpty()) return "ログ未接続：先に「接続・ペアリング設定」で6桁コードを登録してください。";
+        HttpURLConnection c = null;
         try {
-            try {
-                String strTrim = sharedPreferences.getString("endpoint", "").trim();
-                if (strTrim.isEmpty()) {
-                    strTrim = PttService.discover();
+            String base = prefs.getString("endpoint", "").trim();
+            if (base.isEmpty()) base = PttService.discover();
+            if (!base.startsWith("https://")) return "ログ取得先をHTTPSで確認できません。";
+            while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+            c = (HttpURLConnection) new URL(base + "/watch-home/logs").openConnection();
+            c.setConnectTimeout(7000);
+            c.setReadTimeout(7000);
+            c.setUseCaches(false);
+            c.setInstanceFollowRedirects(false);
+            c.setRequestProperty("Authorization", "Bearer " + token);
+            int code = c.getResponseCode();
+            if (code == 401 || code == 403) return "ログの認証に失敗しました。ペアリングをやり直してください。";
+            if (code == 404) return "PC側にログ中継機能がまだ登録されていません。";
+            if (code == 503) return "PC側のログ接続設定がまだ完了していません。";
+            if (code == 502) return "PC側の旧ログ配信（8765番）に接続できません。PC側を確認してください。";
+            if (code != 200) return "PCログの取得に失敗しました。HTTP " + code;
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (InputStream in = c.getInputStream()) {
+                byte[] buf = new byte[4096];
+                int n;
+                while ((n = in.read(buf)) >= 0) {
+                    if (n == 0) continue;
+                    if (out.size() + n > 524288) throw new IOException("ログ受信サイズ超過");
+                    out.write(buf, 0, n);
                 }
-                if (!strTrim.startsWith("https://")) {
-                    return "ログ取得先をHTTPSで確認できません。";
-                }
-                while (strTrim.endsWith("/")) {
-                    strTrim = strTrim.substring(0, strTrim.length() - 1);
-                }
-                HttpURLConnection httpURLConnection2 = (HttpURLConnection) new URL(strTrim + "/watch-home/logs").openConnection();
-                try {
-                    httpURLConnection2.setConnectTimeout(7000);
-                    httpURLConnection2.setReadTimeout(7000);
-                    httpURLConnection2.setUseCaches(false);
-                    httpURLConnection2.setInstanceFollowRedirects(false);
-                    httpURLConnection2.setRequestProperty("Authorization", "Bearer " + string);
-                    int responseCode = httpURLConnection2.getResponseCode();
-                    if (responseCode != 401 && responseCode != 403) {
-                        if (responseCode == 404) {
-                            if (httpURLConnection2 != null) {
-                                httpURLConnection2.disconnect();
-                            }
-                            return "PC側にログ中継機能がまだ登録されていません。";
-                        }
-                        if (responseCode == 503) {
-                            if (httpURLConnection2 != null) {
-                                httpURLConnection2.disconnect();
-                            }
-                            return "PC側のログ接続設定がまだ完了していません。";
-                        }
-                        if (responseCode == 502) {
-                            if (httpURLConnection2 != null) {
-                                httpURLConnection2.disconnect();
-                            }
-                            return "PC側の旧ログ配信（8765番）に接続できません。PC側を確認してください。";
-                        }
-                        if (responseCode != 200) {
-                            String str = "PCログの取得に失敗しました。HTTP " + responseCode;
-                            if (httpURLConnection2 != null) {
-                                httpURLConnection2.disconnect();
-                            }
-                            return str;
-                        }
-                        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                        InputStream inputStream = httpURLConnection2.getInputStream();
-                        try {
-                            byte[] bArr = new byte[4096];
-                            while (true) {
-                                int i = inputStream.read(bArr);
-                                if (i == -1) {
-                                    if (inputStream != null) {
-                                        inputStream.close();
-                                    }
-                                    JSONObject jSONObject = new JSONObject(byteArrayOutputStream.toString("UTF-8"));
-                                    String strOptString = jSONObject.optString("state", "ok");
-                                    if (!"ok".equals(strOptString) && !"missing".equals(strOptString)) {
-                                        if (httpURLConnection2 != null) {
-                                            httpURLConnection2.disconnect();
-                                        }
-                                        return "PC側ログ読込エラー";
-                                    }
-                                    JSONArray jSONArrayOptJSONArray = jSONObject.optJSONArray("lines");
-                                    StringBuilder sb = new StringBuilder(jSONObject.optString("date", "") + "\\n");
-                                    if ("missing".equals(strOptString)) {
-                                        sb.append("本日のログはまだありません");
-                                    } else if (jSONArrayOptJSONArray == null || jSONArrayOptJSONArray.length() == 0) {
-                                        sb.append("本日のログは空です");
-                                    } else {
-                                        for (int length = jSONArrayOptJSONArray.length() - 1; length >= 0; length--) {
-                                            sb.append(jSONArrayOptJSONArray.optString(length)).append("\\n\\n");
-                                        }
-                                    }
-                                    String string2 = sb.toString();
-                                    if (httpURLConnection2 != null) {
-                                        httpURLConnection2.disconnect();
-                                    }
-                                    return string2;
-                                }
-                                if (byteArrayOutputStream.size() + i > 524288) {
-                                    throw new IOException("ログ受信サイズ超過");
-                                }
-                                byteArrayOutputStream.write(bArr, 0, i);
-                            }
-                        } catch (Throwable th) {
-                            if (inputStream != null) {
-                                try {
-                                    inputStream.close();
-                                } catch (Throwable th2) {
-                                    th.addSuppressed(th2);
-                                }
-                            }
-                            throw th;
-                        }
-                    }
-                    if (httpURLConnection2 != null) {
-                        httpURLConnection2.disconnect();
-                    }
-                    return "ログの認証に失敗しました。ペアリングをやり直してください。";
-                } catch (Exception e) {
-                    e = e;
-                    httpURLConnection = httpURLConnection2;
-                } catch (Throwable th3) {
-                    th = th3;
-                    httpURLConnection = httpURLConnection2;
-                    if (httpURLConnection != null) {
-                        httpURLConnection.disconnect();
-                    }
-                    throw th;
-                }
-            } catch (Exception e2) {
-                e = e2;
             }
-        } catch (Throwable th4) {
-            th = th4;
+            JSONObject json = new JSONObject(out.toString("UTF-8"));
+            String state = json.optString("state", "ok");
+            if (!"ok".equals(state) && !"missing".equals(state)) return "PC側ログ読込エラー";
+            JSONArray lines = json.optJSONArray("lines");
+            StringBuilder b = new StringBuilder(json.optString("date", "") + "\n");
+            if ("missing".equals(state)) {
+                b.append("本日のログはまだありません");
+            } else if (lines == null || lines.length() == 0) {
+                b.append("本日のログは空です");
+            } else {
+                for (int i = lines.length() - 1; i >= 0; i--) b.append(lines.optString(i)).append("\n\n");
+            }
+            return b.toString();
+        } catch (Exception e) {
+            return "PCログ取得失敗: " + e.getClass().getSimpleName() + ": " + e.getMessage();
+        } finally {
+            if (c != null) c.disconnect();
         }
-        String str2 = "PCログ取得失敗: " + e.getClass().getSimpleName() + ": " + e.getMessage();
-        if (httpURLConnection != null) {
-            httpURLConnection.disconnect();
-        }
-        return str2;
     }
 
     /* JADX INFO: Access modifiers changed from: private */
