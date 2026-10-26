@@ -22,9 +22,9 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/jadx/bin/jadx -d /tmp/watch-dec downloads/bee-home-ptt-v0.1.9.apk >/tmp/jadx.log 2>&1 || true
-          echo "=== JADX ==="
-          tail -40 /tmp/jadx.log
-          echo "=== BUTTON MATCHES ==="
-          grep -R -n -C 30 "押して話す" /tmp/watch-dec || true
-          echo "=== RECORD MATCHES ==="
-          grep -R -n -C 12 "録音\|AudioRecord\|MediaRecorder\|ptt" /tmp/watch-dec/sources/jp/beeflat/watchhomeptt 2>/dev/null | head -500 || true
+          echo "=== PACKAGE FILES ==="
+          find /tmp/watch-dec/sources/jp/beeflat/watchhomeptt -maxdepth 1 -type f -printf '%f\n' | sort
+          echo "=== PTT SERVICE AUDIO ==="
+          grep -n -C 25 "AudioRecord\|TALK_START\|TALK_STOP\|WebSocket\|send" /tmp/watch-dec/sources/jp/beeflat/watchhomeptt/PttService.java | head -700 || true
+          echo "=== MANIFEST ==="
+          sed -n '1,260p' /tmp/watch-dec/resources/AndroidManifest.xml
