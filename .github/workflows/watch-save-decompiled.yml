@@ -1,0 +1,36 @@
+name: Save current watch decompiled source
+on:
+  push:
+    branches: [ "watch-recording-button-20261026" ]
+    paths:
+      - ".github/workflows/watch-save-decompiled.yml"
+permissions:
+  contents: write
+jobs:
+  save:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install jadx
+        shell: bash
+        run: |
+          set -euo pipefail
+          url=$(curl -fsSL https://api.github.com/repos/skylot/jadx/releases/latest | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["browser_download_url"] for x in d["assets"] if x["name"].endswith(".zip") and "jadx-" in x["name"]))')
+          curl -fsSL "$url" -o /tmp/jadx.zip
+          unzip -q /tmp/jadx.zip -d /tmp/jadx
+      - name: Save decompiled package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/watch-dec watch-current-decompiled
+          /tmp/jadx/bin/jadx -d /tmp/watch-dec downloads/bee-home-ptt-v0.1.9.apk >/tmp/jadx.log 2>&1 || true
+          mkdir -p watch-current-decompiled/java watch-current-decompiled/res
+          cp /tmp/watch-dec/sources/jp/beeflat/watchhomeptt/*.java watch-current-decompiled/java/
+          rm -f watch-current-decompiled/java/R.java
+          cp /tmp/watch-dec/resources/AndroidManifest.xml watch-current-decompiled/AndroidManifest.xml
+          cp -R /tmp/watch-dec/resources/res/. watch-current-decompiled/res/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add watch-current-decompiled
+          git commit -m "Save decompiled watch 0.1.9 source" || exit 0
+          git push
