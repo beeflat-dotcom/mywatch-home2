@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.text.SimpleDateFormat;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.ByteBuffer;
@@ -29,6 +30,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
@@ -52,6 +54,10 @@ public final class PttService extends Service {
     private static final long TALK_MAX_MS = 60000;
     static final String TALK_START = "jp.beeflat.watchhomeptt.TALK_START";
     static final String TALK_STOP = "jp.beeflat.watchhomeptt.TALK_STOP";
+    static final String RECORD_START = "jp.beeflat.watchhomeptt.RECORD_START";
+    static final String RECORD_STOP = "jp.beeflat.watchhomeptt.RECORD_STOP";
+    private static final long RECORD_SEGMENT_SAMPLES = RATE * 300L;
+    private static volatile boolean recordingState = false;
     private static volatile String status = "受信待機中";
     private BeeClipLan beeClipLan;
     private Thread player;
@@ -64,6 +70,9 @@ public final class PttService extends Service {
     private final OkHttpClient client = new OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).retryOnConnectionFailure(true).build();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private volatile boolean talkActive = false;
+    private volatile boolean recordActive = false;
+    private volatile boolean captureRunning = false;
+    private final Object captureGuard = new Object();
     private volatile boolean running = true;
     private volatile boolean connecting = false;
     private LinkedBlockingDeque<byte[]> playback = new LinkedBlockingDeque<>(12);
@@ -92,6 +101,19 @@ public final class PttService extends Service {
 
     static String currentState() {
         return status;
+    }
+
+    static boolean isRecording() {
+        return recordingState;
+    }
+
+    static void logEvent(Context context, String text) {
+        try {
+            File file = eventFile(context);
+            try (FileWriter writer = new FileWriter(file, true)) {
+                writer.write(new Date() + " " + text + "\n");
+            }
+        } catch (Exception ignored) {}
     }
 
     /* JADX INFO: Access modifiers changed from: private */
@@ -267,6 +289,14 @@ public final class PttService extends Service {
         }
         if (TALK_STOP.equals(action)) {
             stopTalk();
+            return 1;
+        }
+        if (RECORD_START.equals(action)) {
+            startRecordingOnly();
+            return 1;
+        }
+        if (RECORD_STOP.equals(action)) {
+            stopRecordingOnly();
             return 1;
         }
         if (this.socket != null || this.connecting) {
@@ -485,87 +515,166 @@ public final class PttService extends Service {
     }
 
     private void startTalk() {
-        if (this.talkActive) {
-            return;
-        }
+        if (this.talkActive) return;
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != 0) {
             setStatus("マイク権限が必要です");
             return;
         }
         if (this.socket == null) {
-            setStatus("通信未接続");
+            setStatus(this.recordActive ? "録音中 / 通信未接続" : "通信未接続");
             return;
         }
         this.talkActive = true;
         this.ui.removeCallbacks(this.talkTimeout);
         this.ui.postDelayed(this.talkTimeout, TALK_MAX_MS);
         this.playback.clear();
-        Thread thread = new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.PttService$$ExternalSyntheticLambda4
-            @Override // java.lang.Runnable
-            public final void run() {
-                PttService.this.lambda$startTalk$5();
-            }
-        }, "PTT-Transmit");
-        this.sender = thread;
-        thread.start();
-    }
-
-    /* JADX INFO: Access modifiers changed from: private */
-    /* JADX WARN: Multi-variable type inference failed */
-    /* JADX WARN: Type inference failed for: r5v0 */
-    /* JADX WARN: Type inference failed for: r5v1 */
-    /* JADX WARN: Type inference failed for: r5v12 */
-    /* JADX WARN: Type inference failed for: r5v13 */
-    /* JADX WARN: Type inference failed for: r5v14 */
-    /* JADX WARN: Type inference failed for: r5v2, types: [android.media.AudioRecord] */
-    /* JADX WARN: Type inference failed for: r5v4 */
-    /* JADX WARN: Type inference failed for: r5v6 */
-    public void lambda$startTalk$5() {
-        AudioRecord record = null;
-        try {
-            record = new AudioRecord(1, RATE, 16, 2, Math.max(AudioRecord.getMinBufferSize(RATE, 16, 2), 2560));
-            if (record.getState() != 1) throw new IOException("マイクを初期化できません");
-            record.startRecording();
-            setStatus("送信中");
-            short[] samples = new short[FRAMES];
-            while (this.talkActive) {
-                int n = record.read(samples, 0, FRAMES);
-                if (n <= 0) continue;
-                byte[] name = deviceName(this).getBytes(StandardCharsets.UTF_8);
-                if (name.length > 48) name = Arrays.copyOf(name, 48);
-                int audioLen = n * 2;
-                byte[] audio = new byte[audioLen];
-                ByteBuffer pcm = ByteBuffer.wrap(audio).order(ByteOrder.LITTLE_ENDIAN);
-                for (int i = 0; i < n; i++) pcm.putShort(samples[i]);
-                ByteBuffer out = ByteBuffer.allocate(name.length + 28 + audioLen).order(ByteOrder.BIG_ENDIAN);
-                out.put(new byte[]{66,80,84,49}).put((byte)1)
-                   .putLong(this.uuid.getMostSignificantBits()).putLong(this.uuid.getLeastSignificantBits())
-                   .putInt(this.sequence++).put((byte)name.length).put(name).putShort((short)audioLen).put(audio);
-                WebSocket ws = this.socket;
-                if (ws == null || !ws.send(ByteString.of(out.array()))) break;
-            }
-        } catch (Exception e) {
-            event("transmit " + e);
-            setStatus("送信エラー: " + e.getMessage());
-        } finally {
-            this.talkActive = false;
-            if (record != null) {
-                try { record.stop(); } catch (Exception ignored) {}
-                try { record.release(); } catch (Exception ignored) {}
-            }
-            if (this.socket != null) setStatus("トランシーバー接続中");
-        }
+        setStatus(this.recordActive ? "録音中・送信中" : "送信中");
+        ensureCapture();
     }
 
     private void stopTalk() {
         this.ui.removeCallbacks(this.talkTimeout);
         this.talkActive = false;
+        if (this.recordActive) setStatus("録音中");
+        else if (this.socket != null) setStatus("トランシーバー接続中");
+    }
+
+    private void startRecordingOnly() {
+        if (this.recordActive) return;
+        if (checkSelfPermission("android.permission.RECORD_AUDIO") != 0) {
+            setStatus("マイク権限が必要です");
+            return;
+        }
+        this.recordActive = true;
+        recordingState = true;
+        setStatus(this.talkActive ? "録音中・送信中" : "録音中");
+        event("record start");
+        ensureCapture();
+        RecordingUploader.schedule(this);
+    }
+
+    private void stopRecordingOnly() {
+        if (!this.recordActive) return;
+        this.recordActive = false;
+        recordingState = false;
+        event("record stop");
+        if (this.talkActive) setStatus("送信中");
+        else if (this.socket != null) setStatus("トランシーバー接続中");
+        else setStatus("受信待機中");
+    }
+
+    private void ensureCapture() {
+        synchronized (this.captureGuard) {
+            if (this.captureRunning) return;
+            this.captureRunning = true;
+            Thread thread = new Thread(this::captureLoop, "PTT-SharedCapture");
+            this.sender = thread;
+            thread.start();
+        }
+    }
+
+    private void captureLoop() {
+        AudioRecord record = null;
+        AacM4aWriter writer = null;
+        File recordingFile = null;
+        long segmentSamples = 0L;
+        int part = 1;
+        try {
+            record = new AudioRecord(1, RATE, 16, 2,
+                    Math.max(AudioRecord.getMinBufferSize(RATE, 16, 2), 2560));
+            if (record.getState() != 1) throw new IOException("マイクを初期化できません");
+            record.startRecording();
+            short[] samples = new short[FRAMES];
+
+            while (this.running && (this.talkActive || this.recordActive)) {
+                int n = record.read(samples, 0, FRAMES);
+                if (n <= 0) continue;
+
+                byte[] audio = new byte[n * 2];
+                ByteBuffer pcm = ByteBuffer.wrap(audio).order(ByteOrder.LITTLE_ENDIAN);
+                for (int i = 0; i < n; i++) pcm.putShort(samples[i]);
+
+                if (this.recordActive) {
+                    if (writer == null) {
+                        recordingFile = newRecordingFile(part++);
+                        writer = new AacM4aWriter(recordingFile);
+                        segmentSamples = 0L;
+                        event("record file " + recordingFile.getName());
+                    }
+                    writer.writePcm(audio, audio.length);
+                    segmentSamples += n;
+                    if (segmentSamples >= RECORD_SEGMENT_SAMPLES) {
+                        finishRecordingSegment(writer, recordingFile);
+                        writer = null;
+                        recordingFile = null;
+                        segmentSamples = 0L;
+                    }
+                } else if (writer != null) {
+                    finishRecordingSegment(writer, recordingFile);
+                    writer = null;
+                    recordingFile = null;
+                    segmentSamples = 0L;
+                }
+
+                if (this.talkActive) sendTalkFrame(audio);
+            }
+        } catch (Exception e) {
+            event("capture " + e);
+            if (this.recordActive) setStatus("録音エラー: " + e.getMessage());
+            else if (this.talkActive) setStatus("送信エラー: " + e.getMessage());
+        } finally {
+            if (writer != null) {
+                try { finishRecordingSegment(writer, recordingFile); }
+                catch (Exception e) { event("record close " + e); }
+            }
+            if (record != null) {
+                try { record.stop(); } catch (Exception ignored) {}
+                try { record.release(); } catch (Exception ignored) {}
+            }
+            synchronized (this.captureGuard) { this.captureRunning = false; }
+            if (this.running && (this.talkActive || this.recordActive)) ensureCapture();
+        }
+    }
+
+    private void sendTalkFrame(byte[] audio) {
+        try {
+            WebSocket ws = this.socket;
+            if (ws == null) return;
+            byte[] name = deviceName(this).getBytes(StandardCharsets.UTF_8);
+            if (name.length > 48) name = Arrays.copyOf(name, 48);
+            ByteBuffer out = ByteBuffer.allocate(name.length + 28 + audio.length).order(ByteOrder.BIG_ENDIAN);
+            out.put(new byte[]{66,80,84,49}).put((byte)1)
+                    .putLong(this.uuid.getMostSignificantBits()).putLong(this.uuid.getLeastSignificantBits())
+                    .putInt(this.sequence++).put((byte)name.length).put(name)
+                    .putShort((short)audio.length).put(audio);
+            if (!ws.send(ByteString.of(out.array()))) event("talk send failed");
+        } catch (Exception e) {
+            event("talk frame " + e.getClass().getSimpleName());
+        }
+    }
+
+    private File newRecordingFile(int part) throws IOException {
+        File base = new File(getExternalFilesDir(null), "BeeRecording");
+        if (!base.exists() && !base.mkdirs()) throw new IOException("録音保存先を作成できません");
+        String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.JAPAN).format(new Date());
+        String model = Build.MODEL == null ? "watch" : Build.MODEL.replaceAll("[^0-9A-Za-z_-]", "_");
+        return new File(base, stamp + "_腕時計-" + model + "_支援_" + String.format(Locale.US, "%03d", part) + ".m4a");
+    }
+
+    private void finishRecordingSegment(AacM4aWriter writer, File file) throws Exception {
+        writer.close();
+        if (file != null && file.isFile() && file.length() > 0) {
+            event("record saved " + file.getName() + " " + file.length());
+            RecordingUploader.enqueue(this, file);
+        }
     }
 
     @Override // android.app.Service
     public void onDestroy() {
         this.running = false;
         this.talkActive = false;
+        this.recordActive = false;
+        recordingState = false;
         this.ui.removeCallbacks(this.talkTimeout);
         this.ui.removeCallbacks(this.retryTask);
         BeeClipLan beeClipLan = this.beeClipLan;
@@ -577,9 +686,9 @@ public final class PttService extends Service {
             webSocket.close(1000, "exit");
         }
         Thread thread = this.player;
-        if (thread != null) {
-            thread.interrupt();
-        }
+        if (thread != null) thread.interrupt();
+        Thread capture = this.sender;
+        if (capture != null) capture.interrupt();
         WifiManager.WifiLock wifiLock = this.wifiLock;
         if (wifiLock != null && wifiLock.isHeld()) {
             this.wifiLock.release();
