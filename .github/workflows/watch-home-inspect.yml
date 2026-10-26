@@ -15,15 +15,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/watchsrc
-          cat watch-home-src/source.part00 watch-home-src/source.part01 | tr -d '\r\n' | base64 -d > /tmp/watchsrc/source.zip
+          cat watch-home-src/chunk-* | tr -d '\r\n' | base64 -d > /tmp/watchsrc/source.zip
           unzip -q /tmp/watchsrc/source.zip -d /tmp/watchsrc/unpacked
-          find /tmp/watchsrc/unpacked -maxdepth 5 -type f | sort | head -200
+          find /tmp/watchsrc/unpacked -maxdepth 7 -type f | sort | head -250
       - name: Find PTT button
         shell: bash
         run: |
           set -euo pipefail
           echo "=== MATCHES ==="
-          grep -R -n -C 12 "押して話す" /tmp/watchsrc/unpacked || true
+          grep -R -n -C 16 "押して話す" /tmp/watchsrc/unpacked || true
           echo "=== PACKAGE ==="
           grep -R -n "applicationId\|namespace\|versionCode\|versionName" /tmp/watchsrc/unpacked --include='*.gradle*' || true
           echo "=== SIGNING ==="
