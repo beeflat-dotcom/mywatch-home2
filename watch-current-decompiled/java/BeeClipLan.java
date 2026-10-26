@@ -73,19 +73,19 @@ final class BeeClipLan {
         new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.BeeClipLan$$ExternalSyntheticLambda1
             @Override // java.lang.Runnable
             public final void run() throws Throwable {
-                this.f$0.discoveryLoop();
+                BeeClipLan.this.discoveryLoop();
             }
         }, "BeeClipWatchDiscovery").start();
         new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.BeeClipLan$$ExternalSyntheticLambda2
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.textServerLoop();
+                BeeClipLan.this.textServerLoop();
             }
         }, "BeeClipWatchTextServer").start();
         new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.BeeClipLan$$ExternalSyntheticLambda3
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.phoneAudioLoop();
+                BeeClipLan.this.phoneAudioLoop();
             }
         }, "BeeClipWatchPhoneAudio").start();
     }
@@ -216,7 +216,7 @@ final class BeeClipLan {
                         new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.BeeClipLan$$ExternalSyntheticLambda0
                             @Override // java.lang.Runnable
                             public final void run() {
-                                this.f$0.lambda$textServerLoop$0(socketAccept);
+                                BeeClipLan.this.lambda$textServerLoop$0(socketAccept);
                             }
                         }, "BeeClipWatchSurface").start();
                     }
@@ -430,7 +430,7 @@ final class BeeClipLan {
         new Thread(new Runnable() { // from class: jp.beeflat.watchhomeptt.BeeClipLan$$ExternalSyntheticLambda4
             @Override // java.lang.Runnable
             public final void run() {
-                this.f$0.lambda$audioStart$1();
+                BeeClipLan.this.lambda$audioStart$1();
             }
         }, "BeeClipWatchPhoneConnect").start();
     }
