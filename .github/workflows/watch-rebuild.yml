@@ -35,6 +35,53 @@ jobs:
           mkdir -p watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt
           cp /tmp/watch-dec/sources/jp/beeflat/watchhomeptt/*.java watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt/
           rm -f watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt/R.java
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path("watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt/PttService.java")
+          s=p.read_text()
+          replacement=r'''    public void lambda$startTalk$5() {
+        AudioRecord record = null;
+        try {
+            record = new AudioRecord(1, RATE, 16, 2, Math.max(AudioRecord.getMinBufferSize(RATE, 16, 2), 2560));
+            if (record.getState() != 1) throw new IOException("マイクを初期化できません");
+            record.startRecording();
+            setStatus("送信中");
+            short[] samples = new short[FRAMES];
+            while (this.talkActive) {
+                int n = record.read(samples, 0, FRAMES);
+                if (n <= 0) continue;
+                byte[] name = deviceName(this).getBytes(StandardCharsets.UTF_8);
+                if (name.length > 48) name = Arrays.copyOf(name, 48);
+                int audioLen = n * 2;
+                byte[] audio = new byte[audioLen];
+                ByteBuffer pcm = ByteBuffer.wrap(audio).order(ByteOrder.LITTLE_ENDIAN);
+                for (int i = 0; i < n; i++) pcm.putShort(samples[i]);
+                ByteBuffer out = ByteBuffer.allocate(name.length + 28 + audioLen).order(ByteOrder.BIG_ENDIAN);
+                out.put(new byte[]{66,80,84,49}).put((byte)1)
+                   .putLong(this.uuid.getMostSignificantBits()).putLong(this.uuid.getLeastSignificantBits())
+                   .putInt(this.sequence++).put((byte)name.length).put(name).putShort((short)audioLen).put(audio);
+                WebSocket ws = this.socket;
+                if (ws == null || !ws.send(ByteString.of(out.array()))) break;
+            }
+        } catch (Exception e) {
+            event("transmit " + e);
+            setStatus("送信エラー: " + e.getMessage());
+        } finally {
+            this.talkActive = false;
+            if (record != null) {
+                try { record.stop(); } catch (Exception ignored) {}
+                try { record.release(); } catch (Exception ignored) {}
+            }
+            if (this.socket != null) setStatus("トランシーバー接続中");
+        }
+    }
+
+'''
+          s2=re.sub(r'    public /\* synthetic \*/ void lambda\$startTalk\$5\(\) throws Throwable \{.*?\n    \}\n\n    private void stopTalk\(\)', replacement+'    private void stopTalk()', s, flags=re.S)
+          if s2==s: raise SystemExit("PTT method patch did not match")
+          p.write_text(s2)
+          PY
           mkdir -p watch-current-src/app/src/main/res/xml
           cp /tmp/watch-dec/resources/res/xml/update_paths.xml watch-current-src/app/src/main/res/xml/update_paths.xml
           cp /tmp/watch-dec/resources/AndroidManifest.xml watch-current-src/app/src/main/AndroidManifest.xml
