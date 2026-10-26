@@ -3,6 +3,7 @@ on:
   push:
     branches: [ "watch-recording-button-20261026" ]
     paths:
+      - "watch-current-decompiled/**"
       - ".github/workflows/watch-rebuild.yml"
 jobs:
   build:
@@ -19,79 +20,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Install jadx
-        shell: bash
-        run: |
-          set -euo pipefail
-          url=$(curl -fsSL https://api.github.com/repos/skylot/jadx/releases/latest | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["browser_download_url"] for x in d["assets"] if x["name"].endswith(".zip") and "jadx-" in x["name"]))')
-          curl -fsSL "$url" -o /tmp/jadx.zip
-          unzip -q /tmp/jadx.zip -d /tmp/jadx
       - name: Prepare source project
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/watch-dec watch-current-src
-          /tmp/jadx/bin/jadx -d /tmp/watch-dec downloads/bee-home-ptt-v0.1.9.apk >/tmp/jadx.log 2>&1 || true
+          rm -rf watch-current-src
           mkdir -p watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt
-          cp /tmp/watch-dec/sources/jp/beeflat/watchhomeptt/*.java watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt/
-          rm -f watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt/R.java
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p=Path("watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt/PttService.java")
-          s=p.read_text()
-          replacement=r'''    public void lambda$startTalk$5() {
-        AudioRecord record = null;
-        try {
-            record = new AudioRecord(1, RATE, 16, 2, Math.max(AudioRecord.getMinBufferSize(RATE, 16, 2), 2560));
-            if (record.getState() != 1) throw new IOException("マイクを初期化できません");
-            record.startRecording();
-            setStatus("送信中");
-            short[] samples = new short[FRAMES];
-            while (this.talkActive) {
-                int n = record.read(samples, 0, FRAMES);
-                if (n <= 0) continue;
-                byte[] name = deviceName(this).getBytes(StandardCharsets.UTF_8);
-                if (name.length > 48) name = Arrays.copyOf(name, 48);
-                int audioLen = n * 2;
-                byte[] audio = new byte[audioLen];
-                ByteBuffer pcm = ByteBuffer.wrap(audio).order(ByteOrder.LITTLE_ENDIAN);
-                for (int i = 0; i < n; i++) pcm.putShort(samples[i]);
-                ByteBuffer out = ByteBuffer.allocate(name.length + 28 + audioLen).order(ByteOrder.BIG_ENDIAN);
-                out.put(new byte[]{66,80,84,49}).put((byte)1)
-                   .putLong(this.uuid.getMostSignificantBits()).putLong(this.uuid.getLeastSignificantBits())
-                   .putInt(this.sequence++).put((byte)name.length).put(name).putShort((short)audioLen).put(audio);
-                WebSocket ws = this.socket;
-                if (ws == null || !ws.send(ByteString.of(out.array()))) break;
-            }
-        } catch (Exception e) {
-            event("transmit " + e);
-            setStatus("送信エラー: " + e.getMessage());
-        } finally {
-            this.talkActive = false;
-            if (record != null) {
-                try { record.stop(); } catch (Exception ignored) {}
-                try { record.release(); } catch (Exception ignored) {}
-            }
-            if (this.socket != null) setStatus("トランシーバー接続中");
-        }
-    }
-
-'''
-          s2=re.sub(r'    public /\* synthetic \*/ void lambda\$startTalk\$5\(\) throws Throwable \{.*?\n    \}\n\n    private void stopTalk\(\)', replacement+'    private void stopTalk()', s, flags=re.S)
-          if s2==s: raise SystemExit("PTT method patch did not match")
-          p.write_text(s2)
-          PY
+          cp watch-current-decompiled/java/*.java watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt/
           mkdir -p watch-current-src/app/src/main/res/xml
-          cp /tmp/watch-dec/resources/res/xml/update_paths.xml watch-current-src/app/src/main/res/xml/update_paths.xml
-          cp /tmp/watch-dec/resources/AndroidManifest.xml watch-current-src/app/src/main/AndroidManifest.xml
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path("watch-current-src/app/src/main/AndroidManifest.xml")
-          s=p.read_text()
-          s=s.replace('android:versionCode="10"','android:versionCode="11"').replace('android:versionName="0.1.9"','android:versionName="0.1.10"')
-          p.write_text(s)
-          PY
+          cp watch-current-decompiled/res/xml/update_paths.xml watch-current-src/app/src/main/res/xml/update_paths.xml
+          cp watch-current-decompiled/AndroidManifest.xml watch-current-src/app/src/main/AndroidManifest.xml
+          sed -i 's/android:versionCode="10"/android:versionCode="11"/' watch-current-src/app/src/main/AndroidManifest.xml
+          sed -i 's/android:versionName="0.1.9"/android:versionName="0.1.10"/' watch-current-src/app/src/main/AndroidManifest.xml
           cat > watch-current-src/settings.gradle <<'EOF'
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
@@ -129,5 +69,4 @@ jobs:
       - name: Compile reconstructed source
         working-directory: watch-current-src
         shell: bash
-        run: |
-          gradle :app:assembleDebug --stacktrace
+        run: gradle :app:assembleDebug --stacktrace
