@@ -35,8 +35,8 @@ jobs:
           mkdir -p watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt
           cp /tmp/watch-dec/sources/jp/beeflat/watchhomeptt/*.java watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt/
           rm -f watch-current-src/app/src/main/java/jp/beeflat/watchhomeptt/R.java
-          mkdir -p watch-current-src/app/src/main/res
-          cp -R /tmp/watch-dec/resources/res/. watch-current-src/app/src/main/res/
+          mkdir -p watch-current-src/app/src/main/res/xml
+          cp /tmp/watch-dec/resources/res/xml/update_paths.xml watch-current-src/app/src/main/res/xml/update_paths.xml
           cp /tmp/watch-dec/resources/AndroidManifest.xml watch-current-src/app/src/main/AndroidManifest.xml
           python3 - <<'PY'
           from pathlib import Path
