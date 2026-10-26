@@ -602,96 +602,40 @@ public final class PttService extends Service {
     /* JADX WARN: Type inference failed for: r5v2, types: [android.media.AudioRecord] */
     /* JADX WARN: Type inference failed for: r5v4 */
     /* JADX WARN: Type inference failed for: r5v6 */
-    public /* synthetic */ void lambda$startTalk$5() throws Throwable {
-        Object obj;
-        ?? r5 = 0;
-        AudioRecord audioRecord = null;
+    public void lambda$startTalk$5() {
+        AudioRecord record = null;
         try {
-            try {
-                AudioRecord audioRecord2 = new AudioRecord(1, RATE, 16, 2, Math.max(AudioRecord.getMinBufferSize(RATE, 16, 2), 2560));
-                try {
-                    if (audioRecord2.getState() != 1) {
-                        throw new IOException("マイクを初期化できません");
-                    }
-                    audioRecord2.startRecording();
-                    setStatus("送信中");
-                    short[] sArr = new short[FRAMES];
-                    while (this.talkActive) {
-                        int i = audioRecord2.read(sArr, 0, FRAMES);
-                        if (i > 0) {
-                            byte[] bytes = deviceName(this).getBytes(StandardCharsets.UTF_8);
-                            if (bytes.length > 48) {
-                                bytes = Arrays.copyOf(bytes, 48);
-                            }
-                            int i2 = i * 2;
-                            byte[] bArr = new byte[i2];
-                            ByteBuffer byteBufferOrder = ByteBuffer.wrap(bArr).order(ByteOrder.LITTLE_ENDIAN);
-                            for (int i3 = 0; i3 < i; i3++) {
-                                byteBufferOrder.putShort(sArr[i3]);
-                            }
-                            ByteBuffer byteBufferOrder2 = ByteBuffer.allocate(bytes.length + 28 + i2).order(ByteOrder.BIG_ENDIAN);
-                            ByteBuffer byteBufferPutLong = byteBufferOrder2.put(new byte[]{66, 80, 84, 49}).put((byte) 1).putLong(this.uuid.getMostSignificantBits()).putLong(this.uuid.getLeastSignificantBits());
-                            int i4 = this.sequence;
-                            this.sequence = i4 + 1;
-                            byteBufferPutLong.putInt(i4).put((byte) bytes.length).put(bytes).putShort((short) i2);
-                            byteBufferOrder2.put(bArr);
-                            WebSocket webSocket = this.socket;
-                            if (webSocket == null || !webSocket.send(ByteString.of(byteBufferOrder2.array()))) {
-                                break;
-                            }
-                        }
-                    }
-                    this.talkActive = false;
-                    try {
-                        audioRecord2.stop();
-                    } catch (Exception unused) {
-                    }
-                    audioRecord2.release();
-                    obj = sArr;
-                    r5 = sArr;
-                    if (this.socket != null) {
-                        setStatus("トランシーバー接続中");
-                        r5 = obj;
-                    }
-                } catch (Exception e) {
-                    e = e;
-                    audioRecord = audioRecord2;
-                    event("transmit " + e);
-                    setStatus("送信エラー: " + e.getMessage());
-                    this.talkActive = false;
-                    if (audioRecord != null) {
-                        try {
-                            audioRecord.stop();
-                        } catch (Exception unused2) {
-                        }
-                        audioRecord.release();
-                    }
-                    obj = audioRecord;
-                    r5 = audioRecord;
-                    if (this.socket != null) {
-                    }
-                } catch (Throwable th) {
-                    th = th;
-                    r5 = audioRecord2;
-                    this.talkActive = false;
-                    if (r5 != 0) {
-                        try {
-                            r5.stop();
-                        } catch (Exception unused3) {
-                        }
-                        r5.release();
-                    }
-                    if (this.socket == null) {
-                        throw th;
-                    }
-                    setStatus("トランシーバー接続中");
-                    throw th;
-                }
-            } catch (Throwable th2) {
-                th = th2;
+            record = new AudioRecord(1, RATE, 16, 2, Math.max(AudioRecord.getMinBufferSize(RATE, 16, 2), 2560));
+            if (record.getState() != 1) throw new IOException("マイクを初期化できません");
+            record.startRecording();
+            setStatus("送信中");
+            short[] samples = new short[FRAMES];
+            while (this.talkActive) {
+                int n = record.read(samples, 0, FRAMES);
+                if (n <= 0) continue;
+                byte[] name = deviceName(this).getBytes(StandardCharsets.UTF_8);
+                if (name.length > 48) name = Arrays.copyOf(name, 48);
+                int audioLen = n * 2;
+                byte[] audio = new byte[audioLen];
+                ByteBuffer pcm = ByteBuffer.wrap(audio).order(ByteOrder.LITTLE_ENDIAN);
+                for (int i = 0; i < n; i++) pcm.putShort(samples[i]);
+                ByteBuffer out = ByteBuffer.allocate(name.length + 28 + audioLen).order(ByteOrder.BIG_ENDIAN);
+                out.put(new byte[]{66,80,84,49}).put((byte)1)
+                   .putLong(this.uuid.getMostSignificantBits()).putLong(this.uuid.getLeastSignificantBits())
+                   .putInt(this.sequence++).put((byte)name.length).put(name).putShort((short)audioLen).put(audio);
+                WebSocket ws = this.socket;
+                if (ws == null || !ws.send(ByteString.of(out.array()))) break;
             }
-        } catch (Exception e2) {
-            e = e2;
+        } catch (Exception e) {
+            event("transmit " + e);
+            setStatus("送信エラー: " + e.getMessage());
+        } finally {
+            this.talkActive = false;
+            if (record != null) {
+                try { record.stop(); } catch (Exception ignored) {}
+                try { record.release(); } catch (Exception ignored) {}
+            }
+            if (this.socket != null) setStatus("トランシーバー接続中");
         }
     }
 
