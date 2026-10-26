@@ -83,7 +83,7 @@ final class LegacyQr {
     static void show(final Activity activity) {
         try {
             Bitmap bitmap = bitmap(activity);
-            final Dialog dialog = new Dialog(activity, android.R.style.Theme.Material.NoActionBar);
+            final Dialog dialog = new Dialog(activity, android.R.style.Theme_Material_NoActionBar);
             LinearLayout linearLayout = new LinearLayout(activity);
             linearLayout.setOrientation(1);
             linearLayout.setBackgroundColor(ViewCompat.MEASURED_STATE_MASK);
