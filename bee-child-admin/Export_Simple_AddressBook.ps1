@@ -213,7 +213,16 @@ try {
     $ws.Range('L6:L' + $last).NumberFormat = '@'
     $ws.Range('O6:O' + $last).NumberFormat = '@'
     $ws.Range('T6:T' + $last).NumberFormat = '@'
-    $ws.Range('A6:T' + $last).Value2 = $rows
+    # PS 5.1 COM binder can reject a multi-dimensional SAFEARRAY on Value2.
+    # Individual cells are used deliberately (small master, at most a few hundred rows).
+    for ($ri=0; $ri -lt $n; $ri++) {
+        for ($ci=0; $ci -lt $width; $ci++) {
+            $v = $rows[$ri,$ci]
+            if ($null -ne $v) {
+                $ws.Cells.Item($ri+6,$ci+1).Value2 = $v
+            }
+        }
+    }
     $ws.Range('A6:T' + $last).RowHeight = 23
     $ws.Range('A6:T' + $last).Font.Name = 'Yu Gothic'
     $ws.Range('A5:T' + $last).VerticalAlignment = -4108
