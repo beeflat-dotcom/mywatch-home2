@@ -171,7 +171,7 @@ class ChildRetirementStore:
                     folder = self._archived_dir(inp["full_name"])
                     mode = "archived_only"
                     cid = ""
-                    reference = str(folder.relative_to(Path.home() / "Dropbox"))
+                    reference = str(folder.relative_to(self.archive_root.parent))
                     changes = {}
                     already_inactive = True
                 else:
