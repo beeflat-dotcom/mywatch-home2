@@ -130,10 +130,10 @@ def run() -> None:
             app=FastAPI()
             install_child_retire_api(app,store)
             client=TestClient(app)
-            assert client.get("/child-admin/retired").status_code==403
+            assert client.get("/child-admin/retirements/list").status_code==403
             assert client.post("/child-admin/retire",json={}).status_code==403
             headers={"X-Bee-Admin-Secret":"d"*64}
-            assert client.get("/child-admin/retired",headers=headers).json()["retired_count"]==0
+            assert client.get("/child-admin/retirements/list",headers=headers).json()["retired_count"]==0
             bad=client.post("/child-admin/retire",headers=headers,json={
                 "client_action_id":str(uuid.uuid4()),"full_name":"森河 愛花",
                 "child_id":CID,"effective_date":"2026-99-99",
@@ -145,7 +145,7 @@ def run() -> None:
             })
             assert req.status_code==200,req.text
             assert req.json()["retirement_status"]=="retired"
-            assert client.get("/child-admin/retired",headers=headers).json()["retired_count"]==1
+            assert client.get("/child-admin/retirements/list",headers=headers).json()["retired_count"]==1
         finally:
             if old is None:os.environ.pop("LOCALAPPDATA",None)
             else:os.environ["LOCALAPPDATA"]=old
