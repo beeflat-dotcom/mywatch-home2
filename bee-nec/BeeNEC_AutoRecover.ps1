@@ -57,37 +57,14 @@ function ApiRestartCoolingDown {
 function MarkApiRestart { [IO.File]::WriteAllText($apiRestartFile,[DateTime]::UtcNow.ToString('o')) }
 
 function ApiHealthy {
-    # The HTTP server must reply, not merely have a TCP LISTEN socket.
-    # Verify port ownership so another process cannot count as NEC healthy.
+    # MCP Streamable HTTP GET / may wait without producing a response.
+    # Confirm TCP 8779 is owned by the expected BeeNEC Python process.
+    # Actual API tool requests are checked separately when available.
     $procs=@(ApiProcesses)
-    if ($procs.Count -eq 0) { return $false }
+    if ($procs.Count -eq 0 -or $procs.Count -gt 2) { return $false }
     $ids=@($procs | ForEach-Object { [int]$_.ProcessId })
     $listeners=@(Get-NetTCPConnection -LocalPort 8779 -State Listen -ErrorAction SilentlyContinue)
-    if (@($listeners | Where-Object { $ids -contains [int]$_.OwningProcess }).Count -eq 0) { return $false }
-    $response=$null
-    try {
-        # 404/405 also prove that the server is responding, even without a / route.
-        # No credentials, no redirects, and no mutating API calls.
-        $req=[System.Net.HttpWebRequest]::Create($apiProbeUrl)
-        $req.Method='GET'
-        $req.Timeout=2000
-        $req.ReadWriteTimeout=2000
-        $req.AllowAutoRedirect=$false
-        $req.KeepAlive=$false
-        $req.Proxy=$null
-        $response=$req.GetResponse()
-        return ([int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 500)
-    } catch [System.Net.WebException] {
-        if ($_.Exception.Response -is [System.Net.HttpWebResponse]) {
-            $response=$_.Exception.Response
-            return ([int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 500)
-        }
-        return $false
-    } catch {
-        return $false
-    } finally {
-        if ($response) { $response.Dispose() }
-    }
+    return (@($listeners | Where-Object { $ids -contains [int]$_.OwningProcess }).Count -gt 0)
 }
 
 function StartApi {
