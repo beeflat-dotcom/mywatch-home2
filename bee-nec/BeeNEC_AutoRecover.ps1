@@ -42,12 +42,24 @@ function StartApi {
     if (Listening) { return $true }
     if (-not (Test-Path $py) -or -not (Test-Path $server)) { Log 'ERROR: NEC API files missing'; return $false }
     $procs=@(ApiProcesses)
-    if ($procs.Count -gt 1) { Log 'ERROR: multiple NEC API processes; left untouched'; return $false }
-    if ($procs.Count -eq 1) {
-        if ($procs[0].CreationDate -gt (Get-Date).AddSeconds(-100)) { return $false }
+    # A Windows venv python.exe launches a child python.exe for the actual worker.
+    # Treat exactly one parent/child pair as ONE logical API; unrelated duplicates
+    # are never terminated automatically.
+    if ($procs.Count -gt 2) { Log 'ERROR: unexpected NEC API process count; left untouched'; return $false }
+    if ($procs.Count -eq 2) {
+        $linked = ($procs[0].ParentProcessId -eq $procs[1].ProcessId) -or
+                  ($procs[1].ParentProcessId -eq $procs[0].ProcessId)
+        if (-not $linked) { Log 'ERROR: unrelated NEC API processes; left untouched'; return $false }
+    }
+    if ($procs.Count -gt 0) {
+        foreach ($worker in $procs) {
+            if ($worker.CreationDate -gt (Get-Date).AddSeconds(-100)) { return $false }
+        }
         try {
-            Stop-Process -Id $procs[0].ProcessId -Force
-            Log 'WARN: restarted only unresponsive bee_nec_mcp.py'
+            foreach ($worker in $procs) {
+                Stop-Process -Id $worker.ProcessId -Force -ErrorAction Stop
+            }
+            Log 'WARN: restarted only stalled bee_nec_mcp.py parent/child processes'
             Start-Sleep -Seconds 2
         } catch { Log 'ERROR: failed to stop stalled NEC API'; return $false }
     }
