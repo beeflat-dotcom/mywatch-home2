@@ -176,7 +176,7 @@ try {
         $num = [int]$child.no
         $rows[$i,0] = $num
         $rows[$i,1] = TextValue $child.shop
-        $rows[$i,2] = if($effectiveActive){'利用中'}else{'停止'}
+        $rows[$i,2] = if($b -and ($b.retired -eq $true -or $b.retirement_status -eq 'retired')){'退所'}elseif($effectiveActive){'利用中'}else{'停止'}
         $rows[$i,3] = TextValue $name
         $rows[$i,4] = TextValue $surname
         $rows[$i,5] = TextValue $given
