@@ -27,6 +27,9 @@ $lease = [System.IO.File]::Open($lockFile, [IO.FileMode]::OpenOrCreate, [IO.File
 $excel = $null
 $book = $null
 $candidate = $null
+$previewBook = $null
+$csvPath = $null
+$viewerPath = $null
 
 function CurrentSource {
     $nowMonth = (Get-Date).ToString('yyyy-MM')
@@ -128,13 +131,11 @@ try {
         }
     }
 
-    # Remove only the auto-generated sheet; leave legacy tabs unchanged.
-    foreach ($old in @($book.Worksheets)) {
-        if ($old.Name -eq $sheetName) { $old.Delete(); break }
+    # Remove only our generated sheet. All other legacy sheets remain intact.
+    for ($j=[int]$book.Worksheets.Count; $j -ge 1; $j--) {
+        $oldSheet = $book.Worksheets.Item($j)
+        if ($oldSheet.Name -eq $sheetName) { $oldSheet.Delete(); break }
     }
-    $first = $book.Worksheets.Item(1)
-    $ws = $book.Worksheets.Add($first)
-    $ws.Name = $sheetName
 
     $columns = @(
         'No', '店舗', '利用状態', '児童氏名', '苗字', '児童名',
@@ -189,62 +190,39 @@ try {
         $rows[$i,19] = TextValue $id
     }
 
-    $ws.Range('A1:T1').Merge()
-    $ws.Range('A1').Value2 = 'びーふらっと　利用者住所録'
-    $ws.Range('A1:T1').Font.Bold = $true
-    $ws.Range('A1:T1').Font.Size = 16
-    $ws.Range('A1:T1').Interior.Color = 4663579
-    $ws.Range('A1:T1').Font.Color = 16777215
-    $ws.Range('A2:T2').Merge()
-    $ws.Range('A2').Value2 = ('更新: ' + (Get-Date -Format 'yyyy/MM/dd HH:mm:ss') +
-            '　参照マスタ: ' + [IO.Path]::GetFileName($masterPath) + '　総数: ' + $n)
-    $ws.Range('A3:T3').Merge()
-    $ws.Range('A3').Value2 = '閲覧専用: Excelの変更はマスタへ反映されません。基本JSONにない旧連絡先などは元の名簿ろくから表示のみ補完しています。'
-    $ws.Range('A2:T3').Font.Size = 10
-    $ws.Range('A5:T5').Font.Bold = $true
-    $ws.Range('A5:T5').Interior.Color = 11119017
-    $ws.Range('A5:T5').Font.Color = 16777215
-    $ws.Range('A5:T5').RowHeight = 26
-    for ($col=0; $col -lt $width; $col++) {
-        $ws.Cells.Item(5,$col+1).Value2 = $columns[$col]
+    # Bulk generation with openpyxl, then Excel copies one complete worksheet.
+    # This avoids slow/unstable PowerShell 5.1 COM Value2 calls for every row.
+    $csvPath = Join-Path $stateDir ('simple_book_rows_' + $token + '.csv')
+    $viewerPath = Join-Path $stateDir ('simple_book_view_' + $token + '.xlsx')
+    $viewerPy = Join-Path $stateDir 'Generate_Simple_AddressBook_View.py'
+    if (-not (Test-Path -LiteralPath $viewerPy)) {
+        throw 'Viewer generator Python module is not deployed'
     }
-    $last = 5 + $n
-    $ws.Range('I6:I' + $last).NumberFormat = '@'
-    $ws.Range('L6:L' + $last).NumberFormat = '@'
-    $ws.Range('O6:O' + $last).NumberFormat = '@'
-    $ws.Range('T6:T' + $last).NumberFormat = '@'
-    # PS 5.1 COM binder can reject a multi-dimensional SAFEARRAY on Value2.
-    # Individual cells are used deliberately (small master, at most a few hundred rows).
-    for ($ri=0; $ri -lt $n; $ri++) {
-        for ($ci=0; $ci -lt $width; $ci++) {
-            $v = $rows[$ri,$ci]
-            if ($null -ne $v) {
-                $ws.Cells.Item($ri+6,$ci+1).Value2 = $v
+    $csvRows = @(
+        for ($ri=0; $ri -lt $n; $ri++) {
+            $entry = [ordered]@{}
+            for ($ci=0; $ci -lt $width; $ci++) {
+                $v = $rows[$ri,$ci]
+                $entry[$columns[$ci]] = if ($null -eq $v) { '' } else { [string]$v }
             }
+            [pscustomobject]$entry
         }
+    )
+    $csvRows | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
+    $now = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'
+    & python.exe $viewerPy --csv $csvPath --out $viewerPath --source ([IO.Path]::GetFileName($masterPath)) --timestamp $now
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $viewerPath)) {
+        throw 'Viewer sheet Python generation failed'
     }
-    $ws.Range('A6:T' + $last).RowHeight = 23
-    $ws.Range('A6:T' + $last).Font.Name = 'Yu Gothic'
-    $ws.Range('A5:T' + $last).VerticalAlignment = -4108
-    $ws.Range('Q6:Q' + $last).NumberFormat = '0.0'
-    $ws.Range('A5:T' + $last).AutoFilter()
-    foreach ($col in @(@(1,7),@(2,11),@(3,12),@(4,24),@(5,14),@(6,14),@(7,22),@(8,14),@(9,13),
-                        @(10,42),@(11,18),@(12,19),@(13,22),@(14,17),@(15,20),
-                        @(16,14),@(17,11),@(18,14),@(19,14),@(20,42))) {
-        $ws.Columns.Item($col[0]).ColumnWidth = $col[1]
+    $previewBook = $excel.Workbooks.Open($viewerPath, 0, $true)
+    $sourceSheet = $previewBook.Worksheets.Item(1)
+    $sourceSheet.Copy($book.Worksheets.Item(1))
+    if ($book.Worksheets.Item(1).Name -ne $sheetName) {
+        throw 'Excel did not copy the address-book sheet into the legacy workbook'
     }
-    $ws.Columns.Item(20).Hidden = $true
-    for ($i=0; $i -lt $n; $i++) {
-        if (-not $children[$i].active) {
-            $r = $i + 6
-            $ws.Range('A' + $r + ':T' + $r).Interior.Color = 15132390
-        }
-    }
-    $ws.Activate()
-    $excel.ActiveWindow.SplitRow = 5
-    $excel.ActiveWindow.FreezePanes = $true
-    $ws.PageSetup.Orientation = 2
-    $ws.PageSetup.PrintTitleRows = '$1:$5'
+    $book.Worksheets.Item(1).Activate()
+    $previewBook.Close($false)
+    $previewBook = $null
     $book.Save()
     $book.Close($false)
     $book = $null
@@ -271,10 +249,13 @@ try {
     Write-Output ('DIGEST=' + $digest)
 }
 finally {
+    if ($previewBook) { try { $previewBook.Close($false) } catch {} }
     if ($book) { try { $book.Close($false) } catch {} }
     if ($excel) { try { $excel.Quit() } catch {} }
-    if ($candidate -and (Test-Path -LiteralPath $candidate)) {
-        try { Remove-Item -LiteralPath $candidate -Force } catch {}
+    foreach ($temp in @($csvPath,$viewerPath,$candidate)) {
+        if ($temp -and (Test-Path -LiteralPath $temp)) {
+            try { Remove-Item -LiteralPath $temp -Force } catch {}
+        }
     }
     if ($lease) { $lease.Dispose() }
 }
