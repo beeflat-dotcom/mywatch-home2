@@ -6,7 +6,7 @@ Preview is read-only; -Apply is required to update formal JSON.
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)][ValidateSet('options','search','get','create','update')][string]$Action,
+    [Parameter(Mandatory=$true)][ValidateSet('options','search','get','create','update','retire','retirements')][string]$Action,
     [string]$Query = '',
     [string]$ChildId = '',
     [string]$PayloadFile = '',
@@ -54,7 +54,11 @@ switch ($Action) {
         $d=Invoke-ChildAdmin ('/child-admin/'+[uri]::EscapeDataString($ChildId))
         $d|ConvertTo-Json -Depth 8
     }
-    {$_ -in @('create','update')} {
+    retirements {
+        $d=Invoke-ChildAdmin '/child-admin/retirements/list'
+        $d|ConvertTo-Json -Depth 8
+    }
+    {$_ -in @('create','update','retire')} {
         if(-not $PayloadFile -or -not (Test-Path -LiteralPath $PayloadFile)){throw 'PayloadFile missing'}
         try {
             $raw=Get-Content -LiteralPath $PayloadFile -Raw -Encoding UTF8
@@ -71,7 +75,18 @@ switch ($Action) {
             if(-not $Apply){
                 $out=@{ok=$true;status='preview_only';operation=$Action;client_action_id=$v.client_action_id;
                     surname=$v.surname;child_given_name=$v.child_given_name;shop=$v.shop;burden_rate=$v.burden_rate;active=$v.active}
-                if($Action -eq 'create'){
+                if($Action -eq 'retire'){
+                    $out['full_name']=$v.full_name
+                    if($v.child_id){
+                        $o=Invoke-ChildAdmin ('/child-admin/'+[uri]::EscapeDataString($v.child_id))
+                        $out['child_id']=$v.child_id
+                        $out['current_name']=$o.child.name
+                        $out['current_active']=$o.child.active
+                    }else{
+                        $out['mode']='archived_only_requires_archive_match'
+                    }
+                    $out['effective_date']=$v.effective_date
+                }elseif($Action -eq 'create'){
                     $o=Invoke-ChildAdmin '/child-admin/options'
                     $out['next_usage_request_no']=$o.next_usage_request_no
                 }else{
@@ -88,10 +103,17 @@ switch ($Action) {
             }else{
                 $result=Invoke-ChildAdmin ('/child-admin/'+$Action) 'POST' $body
                 if(-not $result.ok -or $result.status -notin @('completed','duplicate')){throw 'Unexpected result'}
-                [pscustomobject]@{ok=$result.ok;status=$result.status;child_id=$result.child_id;
+                if($Action -eq 'retire'){
+                    [pscustomobject]@{ok=$result.ok;status=$result.status;child_id=$result.child_id;
+                        full_name=$result.full_name;mode=$result.mode;
+                        retirement_status=$result.retirement_status;recorded_at=$result.recorded_at;
+                        effective_date=$result.effective_date;address_book_refresh=$result.address_book_refresh}|ConvertTo-Json -Depth 6
+                }else{
+                    [pscustomobject]@{ok=$result.ok;status=$result.status;child_id=$result.child_id;
                     child_name=$result.child.name;usage_request_no=$result.usage_request_no;
                     revision=$result.revision;shop=$result.child.shop;
                     address_book_refresh=$result.address_book_refresh}|ConvertTo-Json -Depth 6
+                }
             }
         }finally {
             if($DeletePayload -and $PayloadFile -and (Test-Path -LiteralPath $PayloadFile)){
