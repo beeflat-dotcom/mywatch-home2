@@ -64,6 +64,18 @@ API例（新規）:
 - 更新前JSONは `児童登録変更バックアップ\<日時>_<action_id>` に保存。履歴は `児童登録変更履歴.json`。
 - 月次一覧は当月と将来月の正式JSONのみ更新し、`運用.json` の`master_month`を当月にする。過去月JSONと確定済み利用条件は維持。
 
+## 退所（2026-11-01導入）
+
+- 退所は通常の利用停止とは区別し、保護者からの指示に基づいて `/child-admin/retire` に登録する。`client_action_id` を再試行時に変更しない。
+- 退所日が明示されなければ `effective_date=null`。指示を記録した日時 `recorded_at` と混同しない。正式な契約・行政手続き完了は `paperwork_status=未確認` とする。
+- 現行の児童マスタにある場合は固定 `child_id` と正式氏名を照合し、今月以降の利用状態を false、`active_basis=child_admin_retired` にする。過去の利用実績、既存ID、利用希望番号は消さない。
+- 現行名簿から既に外れている場合、`Dropbox\\BU\\受給者証\\退所者用` の児童名と1件一致することを確認し、現役マスタへ戻さず退所台帳のみに記録する。
+- 全退所履歴は `Dropbox\\AI用\\ローカルAI\\児童退所記録.json` に保存。`GET /child-admin/retirements/list` で認証付き一覧参照可能。既存の変更履歴と変更前JSONバックアップも保存する。
+- ChatGPTは NEC `%LOCALAPPDATA%\\BeeChildAdminBridge\\BeeChildAdmin_ChatBridge.ps1` を使用。書込は `-Action retire -PayloadFile <JSON> -Apply`、事前確認は `-Apply` なし。退所一覧は `-Action retirements`。
+- Androidアプリ2.9.29は退所専用ボタン未実装。現時点の退所登録は ChatGPT から NEC 経由のAPIを使用する。
+- 住所録 `簡易住所録.xlsx` の「最新住所録（自動）」には、現役マスタに残る退所児童を「退所」として表示。現役マスタから既に除外された児童はこの一覧に重複追加しない。
+- 児童のLINE宛先や各種自動送信の除外ロジックについては、本APIだけですべての停止を保証するものではない。運用元ごとに要確認。
+
 ## Excel住所録
 
 - 出力: `Dropbox\BU\利用希望\2026年\簡易住所録.xlsx`
