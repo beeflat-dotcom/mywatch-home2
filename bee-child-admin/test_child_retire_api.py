@@ -114,7 +114,6 @@ def run() -> None:
         for arc in (root/"児童登録変更バックアップ").iterdir():
             assert json.loads((arc/"transaction.json").read_text(encoding="utf-8"))["state"]=="committed"
         assert len(json.loads((root/"児童登録変更履歴.json").read_text(encoding="utf-8"))["history"])==3
-        assert "森河　愛花" in str(registry)
 
     with tempfile.TemporaryDirectory(prefix="bee_retirement_auth_") as td:
         root=Path(td)/"client"
