@@ -267,7 +267,7 @@ class ChildAdminStore:
         c["active"] = bool(state.get("children", {}).get(c["child_id"], c.get("active", False)))
         c["burden_rate"] = b.get("burden_rate")
         c["usage_request_no"] = b.get("usage_request_no", c.get("no"))
-        for key in DETAILS | DAY_FIELDS:
+        for key in (set(DETAILS) | DAY_FIELDS):
             c[key] = b.get(key, "")
         return c
 
@@ -465,7 +465,7 @@ class ChildAdminStore:
                     info["guardian_given_name"] = values["guardian_given_name"]
                 if "burden_rate" in values:
                     info["burden_rate"] = values["burden_rate"]
-                for key in DETAILS | DAY_FIELDS:
+                for key in (set(DETAILS) | DAY_FIELDS):
                     if key in values:
                         info[key] = values[key]
                 for key in values.get("clear_fields", []):
