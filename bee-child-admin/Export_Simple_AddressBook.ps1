@@ -15,6 +15,7 @@ $ProgressPreference = 'SilentlyContinue'
 $root = Join-Path $env:USERPROFILE 'Dropbox\AI用\ローカルAI'
 $usage = Join-Path $root '利用希望JSON'
 $basicFile = Join-Path $root '児童基本情報.json'
+$statusFile = Join-Path $root '児童利用状態.json'
 $bookFile = Join-Path $env:USERPROFILE ('Dropbox\BU\利用希望\' + (Get-Date -Format 'yyyy') + '年\簡易住所録.xlsx')
 $stateDir = Join-Path $env:LOCALAPPDATA 'BeeSimpleAddressBook'
 $stateFile = Join-Path $stateDir 'last_source_hash.txt'
@@ -51,10 +52,11 @@ function FirstOf($primary, $fallback) {
     if ($null -ne $primary -and [string]$primary -ne '') { return TextValue $primary }
     return TextValue $fallback
 }
-function SourceDigest($master, $basics) {
+function SourceDigest($master, $basics, $status) {
     $data = @(
         ($master.children | Select-Object child_id,name,child_name,short_name,no,shop,active,active_basis | ConvertTo-Json -Depth 5 -Compress),
-        ($basics.children | ConvertTo-Json -Depth 8 -Compress)
+        ($basics.children | ConvertTo-Json -Depth 8 -Compress),
+        ($status.children | ConvertTo-Json -Depth 8 -Compress)
     ) -join '|'
     $bytes = [Text.Encoding]::UTF8.GetBytes($data)
     $sha = [Security.Cryptography.SHA256]::Create()
@@ -68,9 +70,11 @@ try {
     $masterPath = CurrentSource
     $master = Get-Content -LiteralPath $masterPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $basic = Get-Content -LiteralPath $basicFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $status = Get-Content -LiteralPath $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($master.schema_version -ne 1 -or $null -eq $master.children -or $master.children.Count -eq 0) {
         throw 'Formal child master schema is invalid or empty'
     }
+    if ($status.schema_version -ne 1 -or $null -eq $status.children) { throw 'Formal utilization status is invalid' }
     if ($basic.schema_version -ne 1 -or $null -eq $basic.children) {
         throw 'Basic-profile schema is invalid'
     }
@@ -87,7 +91,7 @@ try {
         if ([string]$c.shop -notin @('今','福成')) { throw 'Unknown shop in formal master' }
     }
 
-    $digest = SourceDigest $master $basic
+    $digest = SourceDigest $master $basic $status
     $previousDigest = if (Test-Path $stateFile) { (Get-Content -LiteralPath $stateFile -Raw).Trim() } else { '' }
     if (-not $Force -and -not $PreviewOnly -and $digest -eq $previousDigest) {
         Write-Output ('NO_CHANGE rows=' + $children.Count + ' digest=' + $digest)
@@ -155,6 +159,8 @@ try {
         $given = if($parts.Count -ge 2){$parts[1]}else{''}
         $bprop = $basic.children.PSObject.Properties[$id]
         $b = if($null -ne $bprop){$bprop.Value}else{$null}
+        $statusEntry = $status.children.PSObject.Properties[$id]
+        $effectiveActive = if($statusEntry -and $statusEntry.Value -is [bool]) { [bool]$statusEntry.Value } else { [bool]$child.active }
         $legacy = $null
         $key = [string]$child.no
         if ($legacyByNumber.ContainsKey($key)) {
@@ -170,18 +176,18 @@ try {
         $num = [int]$child.no
         $rows[$i,0] = $num
         $rows[$i,1] = TextValue $child.shop
-        $rows[$i,2] = if($child.active){'利用中'}else{'停止'}
+        $rows[$i,2] = if($effectiveActive){'利用中'}else{'停止'}
         $rows[$i,3] = TextValue $name
         $rows[$i,4] = TextValue $surname
         $rows[$i,5] = TextValue $given
         $rows[$i,6] = TextValue $guardian
         $rows[$i,7] = TextValue $child.short_name
-        $rows[$i,8] = if($legacy){TextValue $legacy.postal}else{''}
+        $rows[$i,8] = FirstOf $b.postal_code $(if($legacy){$legacy.postal}else{''})
         $rows[$i,9] = FirstOf $b.address $(if($legacy){$legacy.address}else{''})
-        $rows[$i,10] = if($legacy){TextValue $legacy.building}else{''}
+        $rows[$i,10] = FirstOf $b.building_name $(if($legacy){$legacy.building}else{''})
         $rows[$i,11] = FirstOf $b.phone $(if($legacy){$legacy.phone}else{''})
         $rows[$i,12] = TextValue $b.school_name
-        $rows[$i,13] = if($legacy){TextValue $legacy.birthday}else{''}
+        $rows[$i,13] = FirstOf $b.birth_date $(if($legacy){$legacy.birthday}else{''})
         $rows[$i,14] = FirstOf $b.recipient_number $(if($legacy){$legacy.recipient}else{''})
         $rows[$i,15] = if($b -and $null -ne $b.usage_request_no){[int]$b.usage_request_no}else{$num}
         $rows[$i,16] = if($b -and $null -ne $b.burden_rate){[double]$b.burden_rate}else{$null}
@@ -230,7 +236,8 @@ try {
     # No stale output if JSON changed during Excel processing.
     $masterCheck = Get-Content -LiteralPath $masterPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $basicCheck = Get-Content -LiteralPath $basicFile -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($digest -ne (SourceDigest $masterCheck $basicCheck)) {
+    $statusCheck = Get-Content -LiteralPath $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($digest -ne (SourceDigest $masterCheck $basicCheck $statusCheck)) {
         throw 'Master changed during export; retry will build fresh listing'
     }
     if ($PreviewOnly) {
