@@ -291,7 +291,7 @@ def install_child_retire_api(app: FastAPI, store: ChildRetirementStore) -> Child
         if len(expected) < 48 or not hmac.compare_digest(expected, supplied):
             raise HTTPException(403, "管理認証が必要です")
 
-    @app.get("/child-admin/retired", dependencies=[Depends(require_admin)])
+    @app.get("/child-admin/retirements/list", dependencies=[Depends(require_admin)])
     def retirement_registry():
         return store.list_retired()
 
