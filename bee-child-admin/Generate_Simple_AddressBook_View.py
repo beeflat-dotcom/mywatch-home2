@@ -78,7 +78,7 @@ def main() -> None:
     normal_fill = PatternFill("solid", fgColor="FFFFFF")
     alternate_fill = PatternFill("solid", fgColor="F0F9FF")
     for index, person in enumerate(people, start=6):
-        is_inactive = person["利用状態"] == "停止"
+        is_inactive = person["利用状態"] in {"停止", "退所"}
         for col, key in enumerate(HEADINGS, start=1):
             raw = person[key]
             cell = ws.cell(index, col, text_cell(raw))
