@@ -1,7 +1,7 @@
 {
-  "version": "2026-11-02-monitor-gateway-v1",
+  "version": "2026-11-02-monitor-gateway-v2",
   "phase": "running",
-  "external_api_url": "https://autumn-bridge-waterproof-officials.trycloudflare.com",
-  "updated_at": "2026-11-02T12:29:18+09:00",
-  "note": "Authenticated gateway on 8788 via HTTPS; business APIs require paired bearer. Existing Android device pairing retained."
+  "external_api_url": "https://bonus-patricia-one-livecam.trycloudflare.com",
+  "updated_at": "2026-11-02T23:42:00+09:00",
+  "note": "Authenticated gateway 8788 HTTPS; paired bearer required for monitor operations."
 }
