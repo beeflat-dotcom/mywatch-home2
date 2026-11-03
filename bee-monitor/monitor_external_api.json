@@ -1,7 +1,7 @@
 {
     "version":  "bee-monitor-endpoint-sync-v3-20261103",
     "phase":  "running",
-    "external_api_url":  "https://affair-twiki-guests-publicity.trycloudflare.com",
-    "updated_at":  "2026-11-03T23:59:43.9617802+09:00",
+    "external_api_url":  "https://mechanism-ticket-edges-june.trycloudflare.com",
+    "updated_at":  "2026-11-04T06:07:40.6746858+09:00",
     "note":  "Protected gateway 8788; paired bearer required."
 }
