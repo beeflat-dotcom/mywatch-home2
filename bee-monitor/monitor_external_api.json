@@ -1,7 +1,7 @@
 {
     "version":  "bee-monitor-endpoint-sync-v3-20261103",
     "phase":  "running",
-    "external_api_url":  "https://toll-submission-synthetic-painted.trycloudflare.com",
-    "updated_at":  "2026-11-13T17:23:40.7631002+09:00",
+    "external_api_url":  "https://realm-kenneth-correlation-marc.trycloudflare.com",
+    "updated_at":  "2026-11-14T05:29:44.5082816+09:00",
     "note":  "Protected gateway 8788; paired bearer required."
 }
