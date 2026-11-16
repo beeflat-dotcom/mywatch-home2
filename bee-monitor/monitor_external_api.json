@@ -1,7 +1,7 @@
 {
     "version":  "bee-monitor-endpoint-sync-v3-20261103",
     "phase":  "running",
-    "external_api_url":  "https://herb-tourist-accessible-basic.trycloudflare.com",
-    "updated_at":  "2026-11-16T06:14:36.3752287+09:00",
+    "external_api_url":  "https://answer-outside-intended-wan.trycloudflare.com",
+    "updated_at":  "2026-11-16T15:08:31.2865806+09:00",
     "note":  "Protected gateway 8788; paired bearer required."
 }
