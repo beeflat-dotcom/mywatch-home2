@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: beeflat-dotcom/BeeTransceiver
-          ref: fix-legacy-net-update-channel-20261124
+          ref: main
           path: rebuilt-net
           persist-credentials: false
       - name: Setup Java
