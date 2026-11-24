@@ -1,0 +1,112 @@
+name: BeeTransceiver legacy NET in-place update channel
+on:
+  push:
+    branches: [fix-ptt-net-update-channel-20261124]
+    paths: [.github/workflows/bee-ptt-net-inplace-update.yml]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish for already-installed legacy NET clients (only if old signing cert matches)"
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: write
+jobs:
+  legacy-net:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      BEE_LEGACY_NET_BUILD: "true"
+      BEE_KEYSTORE_BASE64: ${{ secrets.BEE_NET_LEGACY_KEYSTORE_BASE64 }}
+      BEE_SIGNING_STORE_PASSWORD: ${{ secrets.BEE_NET_LEGACY_STORE_PASSWORD }}
+      BEE_SIGNING_KEY_ALIAS: ${{ secrets.BEE_NET_LEGACY_KEY_ALIAS }}
+      BEE_SIGNING_KEY_PASSWORD: ${{ secrets.BEE_NET_LEGACY_KEY_PASSWORD }}
+      EXPECTED_INSTALLED_CERT: ${{ vars.BEE_NET_LEGACY_INSTALLED_CERT_SHA256 }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout existing updater's repository
+        uses: actions/checkout@v4
+        with:
+          path: original-update-channel
+      - name: Checkout rebuilt NET source
+        uses: actions/checkout@v4
+        with:
+          repository: beeflat-dotcom/BeeTransceiver
+          ref: main
+          path: rebuilt-net
+          persist-credentials: false
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Android SDK
+        shell: bash
+        run: |
+          SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Build compatibility preview without touching installed devices
+        working-directory: rebuilt-net/android
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify compatibility package compilation
+        shell: bash
+        run: |
+          PREVIEW="rebuilt-net/android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$PREVIEW"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging "$PREVIEW" \
+            | grep -q "package: name='jp.beeflat.beetransceiver.net.preview'"
+      - name: Verify original signing material exists before publishing
+        if: ${{ inputs.publish }}
+        shell: bash
+        run: |
+          for item in BEE_KEYSTORE_BASE64 BEE_SIGNING_STORE_PASSWORD BEE_SIGNING_KEY_ALIAS BEE_SIGNING_KEY_PASSWORD EXPECTED_INSTALLED_CERT; do
+            if [ -z "${!item}" ]; then
+              echo "::error::Cannot issue a true in-place update: original NET signing identity is unavailable ($item)."
+              exit 1
+            fi
+          done
+          if ! [[ "$EXPECTED_INSTALLED_CERT" =~ ^[a-fA-F0-9]{64}$ ]]; then
+            echo "::error::Original installed APK signer SHA-256 has not been validated"
+            exit 1
+          fi
+          printf '%s' "$BEE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/legacy-net-release.p12"
+          chmod 600 "$RUNNER_TEMP/legacy-net-release.p12"
+          echo "BEE_SIGNING_FILE=$RUNNER_TEMP/legacy-net-release.p12" >> "$GITHUB_ENV"
+      - name: Build release with ORIGINAL signing key
+        if: ${{ inputs.publish }}
+        working-directory: rebuilt-net/android
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+      - name: Validate package and signer and publish to the EXISTING update channel
+        if: ${{ inputs.publish }}
+        shell: bash
+        run: |
+          APK="rebuilt-net/android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging "$APK" \
+            | grep -q "package: name='jp.beeflat.beetransceiver.net'"
+          actual="$("$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --print-certs "$APK" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+          if [ "${actual,,}" != "${EXPECTED_INSTALLED_CERT,,}" ]; then
+            echo "::error::Certificate is not the one installed on old clients. Refusing destructive update."
+            exit 1
+          fi
+          VERSION=$(sed -n "s/^[[:space:]]*versionName compatNetRelease ? '\([^']*\)'.*/\1/p" rebuilt-net/android/app/build.gradle | head -n1)
+          test -n "$VERSION"
+          TAG="bee-ptt-net-v$VERSION"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release already exists: $TAG"
+            exit 1
+          fi
+          cp "$APK" "$RUNNER_TEMP/BeeTransceiver-NET.apk"
+          gh release create "$TAG" "$RUNNER_TEMP/BeeTransceiver-NET.apk" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "BeeTransceiver NET v$VERSION" \
+            --notes "Original NET package and original signing certificate; in-place update from the existing app's Update button."
