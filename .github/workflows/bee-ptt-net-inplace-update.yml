@@ -1,5 +1,8 @@
 name: BeeTransceiver legacy NET in-place update channel
 on:
+  push:
+    branches: [fix-ptt-net-update-channel-20261124]
+    paths: [.github/workflows/bee-ptt-net-inplace-update.yml]
   workflow_dispatch:
     inputs:
       publish:
