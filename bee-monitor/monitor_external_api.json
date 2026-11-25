@@ -1,7 +1,7 @@
 {
     "version":  "bee-monitor-endpoint-sync-v3-20261103",
     "phase":  "running",
-    "external_api_url":  "https://node-soundtrack-download-royal.trycloudflare.com",
-    "updated_at":  "2026-11-25T06:07:42.6522665+09:00",
+    "external_api_url":  "https://station-ste-actually-hosted.trycloudflare.com",
+    "updated_at":  "2026-11-25T17:27:42.6530527+09:00",
     "note":  "Protected gateway 8788; paired bearer required."
 }
